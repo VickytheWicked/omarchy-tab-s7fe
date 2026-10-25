@@ -1,0 +1,303 @@
+From 242812a3b3c134251034438e337519d58bbe86e7 Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Sun, 25 Oct 2026 12:31:42 +0530
+Subject: [PATCH] power: supply: sm5714: charge at stock limits and report
+ charging from the charger
+
+The bootloader leaves the SM5714 charger at 500 mA input / ~530 mA charge, so with the screen on the battery still drains. Poll the charger (I2C 0x49) every 10 s: set the stock 1800 mA input / 2100 mA charge / 4380 mV float, follow the stock temperature limits (41 C reduce, 50 C/0 C suspend), run and kick the 90 s watchdog, and report STATUS from VBUS_POK/CHGON/TOPOFF.
+---
+ drivers/power/supply/sm5714_fuelgauge.c | 231 ++++++++++++++++++++++--
+ 1 file changed, 212 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/power/supply/sm5714_fuelgauge.c b/drivers/power/supply/sm5714_fuelgauge.c
+index a87c5fe..4e4106b 100644
+--- a/drivers/power/supply/sm5714_fuelgauge.c
++++ b/drivers/power/supply/sm5714_fuelgauge.c
+@@ -1,12 +1,21 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /*
+- * Siliconmitus SM5714 fuel gauge driver
++ * Siliconmitus SM5714 fuel gauge driver, with basic control of the SM5714
++ * switching charger (I2C 0x49 on the same bus) so the battery charges at the
++ * stock limits and the charging state is reported from the charger itself.
++ *
++ * Charger values follow the stock Samsung DT for gts7xllite: float voltage
++ * 4380 mV, input 1800 mA, charge 2100 mA; above 41 C float 4150 mV and less
++ * current, above 50 C or below 0 C charging is suspended.
+  */
+ 
++#include <linux/bits.h>
+ #include <linux/i2c.h>
++#include <linux/math.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/module.h>
+ #include <linux/power_supply.h>
++#include <linux/workqueue.h>
+ 
+ #define SM5714_FG_REG_DEVICE_ID		0x00
+ #define SM5714_FG_REG_AUX_STAT		0x22
+@@ -21,9 +30,62 @@
+ #define SM5714_FG_SRAM_VBAT_AVG		0x08
+ #define SM5714_FG_SRAM_CURRENT_AVG	0x09
+ 
++#define SM5714_CHG_ADDR			0x49
++#define SM5714_CHG_REG_STATUS1		0x0d
++#define SM5714_CHG_REG_STATUS2		0x0e
++#define SM5714_CHG_REG_CNTL2		0x14
++#define SM5714_CHG_REG_VBUSCNTL		0x15
++#define SM5714_CHG_REG_CHGCNTL2		0x18
++#define SM5714_CHG_REG_CHGCNTL4		0x1a
++#define SM5714_CHG_REG_WDTCNTL		0x22
++
++#define SM5714_CHG_STATUS1_VBUSPOK	BIT(0)
++#define SM5714_CHG_STATUS2_CHGON	BIT(3)
++#define SM5714_CHG_STATUS2_TOPOFF	BIT(5)
++#define SM5714_CHG_STATUS2_WDT_EXPIRED	BIT(7)
++
++#define SM5714_CHG_MODE_MASK		0x0f
++#define SM5714_CHG_MODE_SUSPEND		0x0
++#define SM5714_CHG_MODE_CHG_ON_VBUS	0x5
++
++#define SM5714_CHG_WDT_EN		BIT(0)
++#define SM5714_CHG_WDT_KICK		BIT(3)
++#define SM5714_CHG_WDT_CLEAR		BIT(6)
++
++/* Register encodings from the Samsung sm5714_charger driver */
++#define SM5714_CHG_INPUT_MA(ma)		((((ma) - 100) / 25) & 0x7f)
++#define SM5714_CHG_CURRENT_MA(ma)	((7 + ((ma) * 1000 - 109375) / 15625) & 0xff)
++#define SM5714_CHG_FLOAT_MV(mv)		((((mv) - 4050) / 10 + 6) & 0x3f)
++
++#define SM5714_CHG_INPUT_LIMIT_MA	1800
++#define SM5714_CHG_CURRENT_NORMAL_MA	2100
++#define SM5714_CHG_CURRENT_WARM_MA	1000
++#define SM5714_CHG_FLOAT_NORMAL_MV	4380
++#define SM5714_CHG_FLOAT_WARM_MV	4150
++
++/* Battery temperature thresholds in 0.1 C (stock swelling/high/low limits) */
++#define SM5714_TEMP_WARM		410
++#define SM5714_TEMP_WARM_RECOVER	390
++#define SM5714_TEMP_HOT			500
++#define SM5714_TEMP_HOT_RECOVER		480
++#define SM5714_TEMP_COLD		0
++#define SM5714_TEMP_COLD_RECOVER	20
++
++#define SM5714_CHG_POLL			msecs_to_jiffies(10000)
++
++enum sm5714_temp_zone {
++	SM5714_ZONE_NORMAL,
++	SM5714_ZONE_WARM,
++	SM5714_ZONE_STOP,
++};
++
+ struct sm5714_fg {
+ 	struct i2c_client *client;
++	struct i2c_client *chg;
+ 	struct power_supply *psy;
++	struct delayed_work chg_work;
++	enum sm5714_temp_zone zone;
++	u8 last_status1, last_status2;
+ };
+ 
+ static int sm5714_fg_read_sram(struct sm5714_fg *fg, u8 addr)
+@@ -74,6 +136,142 @@ static int sm5714_fg_get_current(struct sm5714_fg *fg, u8 sram_addr, int *out)
+ 	return 0;
+ }
+ 
++static int sm5714_chg_read(struct sm5714_fg *fg, u8 reg)
++{
++	return i2c_smbus_read_byte_data(fg->chg, reg);
++}
++
++static int sm5714_chg_update(struct sm5714_fg *fg, u8 reg, u8 mask, u8 val)
++{
++	int ret = sm5714_chg_read(fg, reg);
++
++	if (ret < 0)
++		return ret;
++	if ((ret & mask) == (val & mask))
++		return 0;
++
++	return i2c_smbus_write_byte_data(fg->chg, reg, (ret & ~mask) | (val & mask));
++}
++
++static int sm5714_fg_charge_status(struct sm5714_fg *fg)
++{
++	int st1, st2, soc;
++
++	st1 = sm5714_chg_read(fg, SM5714_CHG_REG_STATUS1);
++	st2 = sm5714_chg_read(fg, SM5714_CHG_REG_STATUS2);
++	if (st1 < 0 || st2 < 0)
++		return POWER_SUPPLY_STATUS_UNKNOWN;
++
++	if (!(st1 & SM5714_CHG_STATUS1_VBUSPOK))
++		return POWER_SUPPLY_STATUS_DISCHARGING;
++
++	soc = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_SOC);
++	if ((st2 & SM5714_CHG_STATUS2_TOPOFF) ||
++	    (soc >= 0 && ((soc + 0x80) >> 8) >= 100))
++		return POWER_SUPPLY_STATUS_FULL;
++
++	if (st2 & SM5714_CHG_STATUS2_CHGON)
++		return POWER_SUPPLY_STATUS_CHARGING;
++
++	return POWER_SUPPLY_STATUS_NOT_CHARGING;
++}
++
++static int sm5714_fg_temp(struct sm5714_fg *fg, int *temp)
++{
++	int ret = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_TEMPERATURE);
++
++	if (ret < 0)
++		return ret;
++	*temp = (((ret & 0x7fff) * 10) * 2989) >> 11 >> 8;
++	if (ret & 0x8000)
++		*temp = -*temp;
++
++	return 0;
++}
++
++static enum sm5714_temp_zone sm5714_next_zone(enum sm5714_temp_zone zone, int temp)
++{
++	switch (zone) {
++	case SM5714_ZONE_STOP:
++		if (temp <= SM5714_TEMP_HOT_RECOVER && temp >= SM5714_TEMP_COLD_RECOVER)
++			return temp > SM5714_TEMP_WARM_RECOVER ? SM5714_ZONE_WARM : SM5714_ZONE_NORMAL;
++		return SM5714_ZONE_STOP;
++	case SM5714_ZONE_WARM:
++		if (temp >= SM5714_TEMP_HOT || temp <= SM5714_TEMP_COLD)
++			return SM5714_ZONE_STOP;
++		return temp <= SM5714_TEMP_WARM_RECOVER ? SM5714_ZONE_NORMAL : SM5714_ZONE_WARM;
++	default:
++		if (temp >= SM5714_TEMP_HOT || temp <= SM5714_TEMP_COLD)
++			return SM5714_ZONE_STOP;
++		return temp >= SM5714_TEMP_WARM ? SM5714_ZONE_WARM : SM5714_ZONE_NORMAL;
++	}
++}
++
++static void sm5714_chg_work(struct work_struct *work)
++{
++	struct sm5714_fg *fg = container_of(to_delayed_work(work),
++					    struct sm5714_fg, chg_work);
++	struct device *dev = &fg->client->dev;
++	enum sm5714_temp_zone zone;
++	int st1, st2, temp, wdt;
++
++	st1 = sm5714_chg_read(fg, SM5714_CHG_REG_STATUS1);
++	st2 = sm5714_chg_read(fg, SM5714_CHG_REG_STATUS2);
++	if (st1 < 0 || st2 < 0 || sm5714_fg_temp(fg, &temp))
++		goto out;
++
++	zone = sm5714_next_zone(fg->zone, temp);
++	if (zone != fg->zone) {
++		dev_info(dev, "battery %d.%d C: charging %s\n", temp / 10, abs(temp % 10),
++			 zone == SM5714_ZONE_STOP ? "suspended" :
++			 zone == SM5714_ZONE_WARM ? "reduced" : "normal");
++		fg->zone = zone;
++	}
++
++	if (st1 & SM5714_CHG_STATUS1_VBUSPOK) {
++		if (st2 & SM5714_CHG_STATUS2_WDT_EXPIRED)
++			sm5714_chg_update(fg, SM5714_CHG_REG_WDTCNTL,
++					  SM5714_CHG_WDT_CLEAR, SM5714_CHG_WDT_CLEAR);
++
++		sm5714_chg_update(fg, SM5714_CHG_REG_CHGCNTL4, 0x3f,
++				  SM5714_CHG_FLOAT_MV(zone == SM5714_ZONE_NORMAL ?
++						      SM5714_CHG_FLOAT_NORMAL_MV :
++						      SM5714_CHG_FLOAT_WARM_MV));
++		sm5714_chg_update(fg, SM5714_CHG_REG_CHGCNTL2, 0xff,
++				  SM5714_CHG_CURRENT_MA(zone == SM5714_ZONE_NORMAL ?
++							SM5714_CHG_CURRENT_NORMAL_MA :
++							SM5714_CHG_CURRENT_WARM_MA));
++		sm5714_chg_update(fg, SM5714_CHG_REG_VBUSCNTL, 0x7f,
++				  SM5714_CHG_INPUT_MA(SM5714_CHG_INPUT_LIMIT_MA));
++		sm5714_chg_update(fg, SM5714_CHG_REG_CNTL2, SM5714_CHG_MODE_MASK,
++				  zone == SM5714_ZONE_STOP ? SM5714_CHG_MODE_SUSPEND :
++							     SM5714_CHG_MODE_CHG_ON_VBUS);
++
++		/* 90 s watchdog: if Linux stops kicking it the charger falls back to safe defaults */
++		sm5714_chg_update(fg, SM5714_CHG_REG_WDTCNTL, SM5714_CHG_WDT_EN, SM5714_CHG_WDT_EN);
++	}
++
++	wdt = sm5714_chg_read(fg, SM5714_CHG_REG_WDTCNTL);
++	if (wdt >= 0 && (wdt & SM5714_CHG_WDT_EN))
++		i2c_smbus_write_byte_data(fg->chg, SM5714_CHG_REG_WDTCNTL,
++					  wdt | SM5714_CHG_WDT_KICK);
++
++	if (st1 != fg->last_status1 || st2 != fg->last_status2) {
++		fg->last_status1 = st1;
++		fg->last_status2 = st2;
++		power_supply_changed(fg->psy);
++	}
++out:
++	schedule_delayed_work(&fg->chg_work, SM5714_CHG_POLL);
++}
++
++static void sm5714_chg_cancel(void *data)
++{
++	struct sm5714_fg *fg = data;
++
++	cancel_delayed_work_sync(&fg->chg_work);
++}
++
+ static int sm5714_fg_get_property(struct power_supply *psy,
+ 				  enum power_supply_property psp,
+ 				  union power_supply_propval *val)
+@@ -135,23 +333,7 @@ static int sm5714_fg_get_property(struct power_supply *psy,
+ 		break;
+ 
+ 	case POWER_SUPPLY_PROP_STATUS:
+-		ret = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_SOC);
+-		if (ret < 0)
+-			return ret;
+-		if (min((ret + 0x80) >> 8, 100) >= 100) {
+-			val->intval = POWER_SUPPLY_STATUS_FULL;
+-			break;
+-		}
+-		ret = sm5714_fg_get_current(fg, SM5714_FG_SRAM_CURRENT_AVG, &curr);
+-		if (ret < 0)
+-			return ret;
+-		/* positive current flows into the battery */
+-		if (curr > 20)
+-			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+-		else if (curr < -20)
+-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
+-		else
+-			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++		val->intval = sm5714_fg_charge_status(fg);
+ 		break;
+ 
+ 	case POWER_SUPPLY_PROP_PRESENT:
+@@ -213,11 +395,22 @@ static int sm5714_fg_probe(struct i2c_client *client)
+ 	cfg.drv_data = fg;
+ 	cfg.fwnode = dev_fwnode(dev);
+ 
++	fg->chg = devm_i2c_new_dummy_device(dev, client->adapter, SM5714_CHG_ADDR);
++	if (IS_ERR(fg->chg))
++		return dev_err_probe(dev, PTR_ERR(fg->chg),
++				     "failed to add charger i2c client\n");
++
+ 	fg->psy = devm_power_supply_register(dev, &sm5714_fg_desc, &cfg);
+ 	if (IS_ERR(fg->psy))
+ 		return dev_err_probe(dev, PTR_ERR(fg->psy),
+ 				     "failed to register power supply\n");
+ 
++	INIT_DELAYED_WORK(&fg->chg_work, sm5714_chg_work);
++	ret = devm_add_action_or_reset(dev, sm5714_chg_cancel, fg);
++	if (ret)
++		return ret;
++	schedule_delayed_work(&fg->chg_work, 0);
++
+ 	return 0;
+ }
+ 
+@@ -236,5 +429,5 @@ static struct i2c_driver sm5714_fg_driver = {
+ };
+ module_i2c_driver(sm5714_fg_driver);
+ 
+-MODULE_DESCRIPTION("Siliconmitus SM5714 fuel gauge driver");
++MODULE_DESCRIPTION("Siliconmitus SM5714 fuel gauge and basic charger control driver");
+ MODULE_LICENSE("GPL");
+\ No newline at end of file
+-- 
+2.55.0
+

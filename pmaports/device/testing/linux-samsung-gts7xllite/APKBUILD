@@ -9,7 +9,7 @@ maintainer="Vansh <rupeshvansh84@gmail.com>"
 _flavor="samsung-gts7xllite"
 pkgname=linux-$_flavor
 pkgver=7.2.0
-pkgrel=4
+pkgrel=5
 pkgdesc="Mainline kernel fork for Samsung Galaxy Tab S7 FE LTE (SM7225)"
 arch="aarch64"
 _carch="arm64"
@@ -50,6 +50,7 @@ source="
 	0005-arm64-dts-gts7xllite-pmk8350-sid-6.patch
 	0006-power-supply-add-sm5714-fuel-gauge.patch
 	0007-arm64-dts-gts7xllite-otg-role-switch.patch
+	0008-power-supply-sm5714-charger-control.patch
 "
 builddir="$srcdir/linux-$_commit"
 
@@ -92,4 +93,5 @@ a7b930049ce43bc3a24f9b42336acc1981d7fb2bce8e7b82b91c90aac4b641ef2c11d3dd84c4f8bc
 92b986a2c51b01840bd895c9cf76b00e84f5721bb1fead941d95ed2cce6b72da7326e9805f64dc58d5fc5e95fa315345c9e1fc135ba11724bea8f2edeee27c7e  0005-arm64-dts-gts7xllite-pmk8350-sid-6.patch
 df8e2edb31404f31ce9722b52810be0a345de8df6bfde6790cc7db3677e0e325ef7e99b611986cb6ae110633a067a37e62d8f82645e535533d1008680424af40  0006-power-supply-add-sm5714-fuel-gauge.patch
 639b3c651316f8b60ae7b4914b6ee20db8e874a38bb8d8c5131ba580c486c00b48a10ac2726f1f9cbd004c53611c83af1f2f95299ae1c082f4659c553b7b9e54  0007-arm64-dts-gts7xllite-otg-role-switch.patch
+cf952aeb1617540feabe673e4d25000dd37f35b461f3b880464675943dc72ce0a870cc5052efd583b260b8921103b21b25331ed8babde9aa450698adb1b7a5aa  0008-power-supply-sm5714-charger-control.patch
 "

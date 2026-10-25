@@ -2,7 +2,7 @@
 
 Mainline Linux ([postmarketOS](https://postmarketos.org)) on the **Samsung Galaxy Tab S7 FE LTE (SM-T735, `gts7xllite`, Snapdragon 750G / SM7225)**, with an [Omarchy](https://omarchy.org)-style Hyprland desktop: Omarchy's keybindings, menu, Waybar layout and Tokyo Night theme, adapted for a touch tablet.
 
-> ⚠️ **Unlocking the bootloader wipes the tablet and trips Samsung Knox permanently** (Secure Folder, Samsung Pass/Wallet/Health stop working for good). Linux **does not charge the battery** yet. Read [Known limitations](#known-limitations) before you start.
+> ⚠️ **Unlocking the bootloader wipes the tablet and trips Samsung Knox permanently** (Secure Folder, Samsung Pass/Wallet/Health stop working for good). Charging is basic (no fast charging). Read [Known limitations](#known-limitations) before you start.
 
 ## What works
 
@@ -13,11 +13,11 @@ Mainline Linux ([postmarketOS](https://postmarketos.org)) on the **Samsung Galax
 | GPU (Adreno 619) | ✅ | freedreno / Turnip, Hyprland runs accelerated |
 | Wi-Fi (WCN3990) | ✅ | |
 | Bluetooth | ✅ | needs `linux-firmware-qca` |
-| Battery level | ✅ | SM5714 fuel gauge (level, status, voltage, current) |
+| Battery level | ✅ | SM5714 fuel gauge (level, status, voltage, current, temperature) |
 | Power off | ✅ | stays off **with the USB cable unplugged** |
 | USB networking / SSH over USB | ✅ | USB port defaults to device mode |
 | USB host (OTG) | ⚠️ | controller works, but **no 5 V VBUS** (SM5714 charger has no driver): use a powered OTG hub |
-| Charging | ❌ | no SM5714 charger driver yet — charge in Download mode |
+| Charging | ✅ | basic SM5714 charger control at the stock limits (1.8 A in, 2.1 A, 4.38 V), temperature limits, watchdog; no fast charging (SM5440 direct charger / USB-PD) |
 | Audio, camera, S Pen, sensors | ❌ | not working yet |
 
 ## What is in this repo
@@ -46,6 +46,7 @@ Base: [vishalbala-nps/linux](https://github.com/vishalbala-nps/linux) `panel` br
 | 0005 | DTS: PMK8350 is SID 6 (stock layout) — fixes power-off hang, duplicate PON, RTC |
 | 0006 | SM5714 fuel gauge driver (vishalbala's, merge-conflict leftovers removed, STATUS added) |
 | 0007 | DTS: USB OTG with a manual role switch (`tablet-usb-mode`) |
+| 0008 | SM5714 charger control: stock currents/float voltage, 41/50/0 °C limits, 90 s watchdog, charging status from the charger |
 
 ## Installing
 
@@ -114,7 +115,7 @@ SSH: `ssh user@samsung-gts7xllite.local` (avahi) or `ssh user@172.16.42.1` over 
 
 ## Known limitations
 
-- **No charging in Linux.** Linux reads the battery but cannot charge it. Charge in **Download mode** (the bootloader charges). With a cable plugged in, *power off* powers straight back on into Linux, so unplug first.
+- **Charging is basic**: up to about 9 W (5 V, 1.8 A) — no fast charging, the SM5440 direct charger and USB-PD negotiation are not driven. A laptop USB port gives less; with the screen on the battery may only hold or charge slowly. With a cable plugged in, *power off* powers straight back on into Linux, so unplug first.
 - **Power button** only turns the backlight off (and blocks touch); the tablet keeps running. DPMS is avoided on purpose: switching the panel off makes the FT8203 touch driver pulse the reset line it shares with the panel, and with the panel driver's `keep_powered` the display is not re-initialised, so it can stay black.
 - Only the **FocalTech FT8203** panel variant works.
 - Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the screen off.
