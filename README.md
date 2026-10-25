@@ -58,7 +58,7 @@ pmaports/device/testing/
   device-samsung-gts7xllite/    deviceinfo (boots from RECOVERY, rootfs in USERDATA)
   firmware-samsung-gts7xllite/  ADSP/CDSP/modem/Wi-Fi/GPU/touch firmware
 dotfiles/                       Hyprland, Waybar, fuzzel, Alacritty, mako, VSCodium... + tablet-* scripts
-system/                         Hyprland tinydm session, power-key and Chromium settings
+system/                         Hyprland tinydm session, power-key, Chromium and SSH firewall settings
 tools/gen-tablet-menu.py        generates tablet-menu from Omarchy's omarchy-menu.jsonc
 install.sh                      sets up the desktop on a freshly flashed tablet over SSH
 ```
@@ -152,6 +152,20 @@ SSH: `ssh user@samsung-gts7xllite.local` (avahi) or `ssh user@172.16.42.1` over 
 - Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the backlight off.
 - `hyprland-guiutils` and Omarchy's walker/omarchy-shell are not packaged for Alpine; the menu uses fuzzel, the bar uses Waybar.
 - Packages come from Alpine (musl): software built for glibc distributions usually does not run.
+
+## Security
+
+What `install.sh` locks down:
+
+- **SSH is key-only** once a key is in `~/.ssh/authorized_keys` (run `ssh-copy-id` first; without a key, password logins stay on so you are not locked out).
+- **SSH only from the USB cable and the local network** (`system/etc/nftables.d/49_ssh_local.nft`). On a phone hotspot the tablet gets a public IPv6 address, and postmarketOS's firewall accepts SSH from anywhere.
+- The menu's `sudo -n` actions (reboot, shutdown, USB mode, Bluetooth restart, time sync) get a narrow passwordless rule, `/etc/sudoers.d/80-tablet-actions`.
+
+Known risks, by design:
+
+- **Autologin, no lock screen**: anyone holding the tablet has your session. The root filesystem is not encrypted, and an unlocked bootloader lets anyone flash their own image.
+- **Passwordless `sudo` for everything**, if you set it up (`NOPASSWD: ALL`, as on the author's tablet): anything running as your user — a browser exploit, a bad npm package or editor extension, an AI coding agent — becomes root without a prompt and can rewrite the boot image. Delete that sudoers file to require your password; the narrow rule above keeps the menu working.
+- **Chromium stores saved passwords with `--password-store=basic`** (no keyring on this setup): effectively plain text to any process running as your user.
 
 ## Recovering / going back to Android
 

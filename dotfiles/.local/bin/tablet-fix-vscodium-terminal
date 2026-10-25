@@ -15,6 +15,7 @@ W=~/.cache/node-pty-build; rm -rf "$W"; mkdir -p "$W"; cd "$W"
 npm pack "node-pty@$ver" >/dev/null
 tar xzf node-pty-*.tgz; cd package
 npm install --ignore-scripts --no-audit --no-fund >/dev/null
-npx --yes node-gyp rebuild >/dev/null
+# node-gyp from Alpine's npm package, not an unpinned download (the result is installed as root)
+node /usr/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild >/dev/null
 sudo install -D -m755 build/Release/pty.node "$P/build/Release/pty.node"
 echo "==> Installed $P/build/Release/pty.node. Restart VSCodium."

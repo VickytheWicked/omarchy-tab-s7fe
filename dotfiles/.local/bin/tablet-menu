@@ -111,7 +111,7 @@ run() {
 }
 
 # Toggle like Omarchy: invoking the menu while it is open closes it (any level).
-pidfile=${XDG_RUNTIME_DIR:-/tmp}/tablet-menu.pid
+pidfile=${XDG_RUNTIME_DIR:-$HOME/.cache}/tablet-menu.pid
 if [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
   kill "$(cat "$pidfile")" 2>/dev/null
   pkill -x fuzzel

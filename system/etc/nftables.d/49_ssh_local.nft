@@ -1,0 +1,12 @@
+# SSH only from the USB cable and the local network. postmarketOS's 50_sshd.nft
+# accepts port 22 from anywhere, and on a phone hotspot the tablet has a public
+# IPv6 address. Loaded before 50_sshd.nft, so the reject below wins; it resets
+# instead of dropping so ssh falls back to the next address (IPv4) at once.
+table inet filter {
+	chain input {
+		iifname "usb*" tcp dport 22 accept comment "SSH over USB"
+		ip saddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 } tcp dport 22 accept comment "SSH from private IPv4"
+		ip6 saddr { fe80::/10, fc00::/7 } tcp dport 22 accept comment "SSH from link-local/ULA IPv6"
+		tcp dport 22 reject with tcp reset comment "no SSH from public addresses"
+	}
+}

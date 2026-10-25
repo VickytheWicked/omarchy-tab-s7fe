@@ -24,12 +24,16 @@ packages=(
 
 echo "==> Copying files"
 tar -C dotfiles -cf - . | ssh "$target" 'tar -xf - -C ~'
-tar -C system -cf - . | ssh "$target" 'cat > /tmp/omarchy-tab-system.tar'
+# private temp file: its contents are extracted as root
+sys_tar=$(ssh "$target" mktemp)
+tar -C system -cf - . | ssh "$target" "cat > $sys_tar"
 
 echo "==> Installing packages and system config (sudo)"
 ssh -t "$target" "set -e
   sudo apk add ${packages[*]}
-  sudo tar -xf /tmp/omarchy-tab-system.tar -C / --no-same-owner
+  sudo tar -xf $sys_tar -C / --no-same-owner
+  rm -f $sys_tar
+  sudo nft -f /etc/nftables.nft   # 49_ssh_local.nft: SSH only from USB and the local network
   sudo install -m755 ~/.local/bin/tablet-* /usr/local/bin/
   # menu, bar and USB-mode actions run sudo -n (no terminal to ask for a password)
   printf '%s\n' \"\$(id -un) ALL=(root) NOPASSWD: /usr/sbin/reboot, /usr/sbin/poweroff, /usr/sbin/rc-service bluetooth restart, /usr/sbin/chronyc -a makestep, /usr/sbin/tee /sys/class/usb_role/a600000.usb-role-switch/role\" | sudo tee /etc/sudoers.d/80-tablet-actions >/dev/null
@@ -39,6 +43,13 @@ ssh -t "$target" "set -e
   sudo sed -i -E 's/^#FastConnectable = false/FastConnectable = true/; s/^#ReconnectAttempts=7/ReconnectAttempts=7/; s/^#ReconnectIntervals=1,2,4,8,16,32,64/ReconnectIntervals=1,2,4,8,16,32,64/; s/^#AutoEnable=true/AutoEnable=true/' /etc/bluetooth/main.conf
   for s in elogind tinydm bluetooth avahi-daemon; do sudo rc-update add \$s default; done
   sudo tinydm-set-session -f -s /usr/share/wayland-sessions/hyprland-dbus.desktop
+  # key-only SSH, but only once a key is installed (ssh-copy-id), or you would be locked out
+  if [ -s ~/.ssh/authorized_keys ]; then
+    printf '%s\\n' 'PasswordAuthentication no' 'KbdInteractiveAuthentication no' | sudo tee /etc/ssh/sshd_config.d/10-key-only.conf >/dev/null
+    sudo rc-service sshd reload
+  else
+    echo '!!! No SSH key in ~/.ssh/authorized_keys: password logins stay on (run ssh-copy-id, then install.sh again)'
+  fi
   mkdir -p ~/Pictures/Screenshots ~/.local/share/wallpapers ~/.local/share/fonts
   tablet-fix-vscodium-terminal
   codium --install-extension enkia.tokyo-night || true
