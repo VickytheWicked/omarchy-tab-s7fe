@@ -3,6 +3,8 @@
 # (Linux boots from RECOVERY; mkinitfs/kernel updates only rewrite /boot/boot.img).
 set -e
 before=$(sha256sum /boot/boot.img | cut -d' ' -f1)
+# keep the image that is on RECOVERY now, before the upgrade can replace it
+sudo cp /boot/boot.img /boot/boot.img.prev-update
 sudo apk update
 sudo apk upgrade -a
 after=$(sha256sum /boot/boot.img | cut -d' ' -f1)
@@ -14,8 +16,7 @@ if [ "$before" = "$after" ]; then
   echo "==> Boot image unchanged; RECOVERY left as is."
   exit 0
 fi
-echo "==> Boot image changed; writing it to RECOVERY"
-sudo cp /boot/boot.img /boot/boot.img.prev-update
+echo "==> Boot image changed; writing it to RECOVERY (previous one: /boot/boot.img.prev-update)"
 sudo dd if=/boot/boot.img of=/dev/disk/by-partlabel/recovery bs=4M conv=fsync
 sync
 size=$(stat -c %s /boot/boot.img)

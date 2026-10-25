@@ -26,7 +26,7 @@ idx=$( {
   printf '%s  Close\0icon\x1fwindow-close\n' $'\U000f0156'
   for i in "${!names[@]}"; do printf '%s\0icon\x1f%s\n' "${names[$i]}" "${icons[$i]}"; done
 } | fuzzel --dmenu --index --prompt "Apps  " --lines 12 --width 42 )
-[[ -z $idx || $idx == 0 ]] && exit 0
+[[ $idx =~ ^[0-9]+$ ]] && (( idx > 0 && idx <= ${#names[@]} )) || exit 0
 i=$((idx - 1))
 cmd=$(sed -E 's/ ?%[fFuUdDnNickvm]//g' <<< "${execs[$i]}")
 [[ ${terms[$i]} == true ]] && cmd="alacritty -e $cmd"

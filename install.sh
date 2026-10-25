@@ -31,6 +31,10 @@ ssh -t "$target" "set -e
   sudo apk add ${packages[*]}
   sudo tar -xf /tmp/omarchy-tab-system.tar -C / --no-same-owner
   sudo install -m755 ~/.local/bin/tablet-* /usr/local/bin/
+  # menu, bar and USB-mode actions run sudo -n (no terminal to ask for a password)
+  printf '%s\n' \"\$(id -un) ALL=(root) NOPASSWD: /usr/sbin/reboot, /usr/sbin/poweroff, /usr/sbin/rc-service bluetooth restart, /usr/sbin/chronyc -a makestep, /usr/sbin/tee /sys/class/usb_role/a600000.usb-role-switch/role\" | sudo tee /etc/sudoers.d/80-tablet-actions >/dev/null
+  sudo chmod 440 /etc/sudoers.d/80-tablet-actions
+  sudo visudo -cf /etc/sudoers.d/80-tablet-actions
   for g in video audio input; do sudo addgroup \$(id -un) \$g || true; done
   sudo sed -i -E 's/^#FastConnectable = false/FastConnectable = true/; s/^#ReconnectAttempts=7/ReconnectAttempts=7/; s/^#ReconnectIntervals=1,2,4,8,16,32,64/ReconnectIntervals=1,2,4,8,16,32,64/; s/^#AutoEnable=true/AutoEnable=true/' /etc/bluetooth/main.conf
   for s in elogind tinydm bluetooth avahi-daemon; do sudo rc-update add \$s default; done

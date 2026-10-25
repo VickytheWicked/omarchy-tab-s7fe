@@ -3,7 +3,7 @@
 case "$1" in
   idle)
     if pgrep -x hypridle >/dev/null; then pkill -x hypridle; notify-send "Stay awake" "Screen will not turn off"
-    else setsid -f hypridle >/dev/null 2>&1; notify-send "Stay awake off" "Screen turns off after 5 minutes"; fi ;;
+    else setsid -f hypridle >/dev/null 2>&1; notify-send "Stay awake off" "Screen turns off after 15 minutes"; fi ;;
   notifications)
     makoctl mode -t do-not-disturb >/dev/null
     if makoctl mode | grep -q do-not-disturb; then echo silenced >/dev/null; else notify-send "Notifications" "On"; fi ;;

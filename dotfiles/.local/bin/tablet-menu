@@ -143,6 +143,9 @@ while true; do
             *) printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}" ;;
           esac
         done | fuzzel --dmenu --index --prompt "$(title_of "$route")  " --lines "${#ids[@]}" --width 42)
+  # fuzzel prints -1 (or the typed text) when Enter matches nothing: never let
+  # that index into ids[] (ids[-1] in the System menu is Shutdown)
+  [[ -z $idx || ( $idx =~ ^[0-9]+$ && $idx -lt ${#ids[@]} ) ]] || exit 0
   [[ -n $idx && ${ids[$idx]} == __close__ ]] && exit 0
   if [[ -z $idx || ${ids[$idx]} == __back__ ]]; then
     [[ -z $route ]] && exit 0
