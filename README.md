@@ -1,8 +1,25 @@
 # Omarchy on the Galaxy Tab S7 FE
 
-Mainline Linux ([postmarketOS](https://postmarketos.org)) on the **Samsung Galaxy Tab S7 FE LTE (SM-T735, `gts7xllite`, Snapdragon 750G / SM7225)**, with an [Omarchy](https://omarchy.org)-style Hyprland desktop: Omarchy's keybindings, menu, Waybar layout and Tokyo Night theme, adapted for a touch tablet.
+**A Samsung Android tablet turned into a real Linux workstation**: mainline Linux 7.2 ([postmarketOS](https://postmarketos.org)) on the Galaxy Tab S7 FE, with an [Omarchy](https://omarchy.org)-style Hyprland desktop — same keybindings, menu, bar and Tokyo Night theme as on my laptop, adapted for touch.
+
+![Linux 7.2](https://img.shields.io/badge/Linux-7.2_mainline-1a1b26?style=flat-square&logo=linux&logoColor=c0caf5)
+![postmarketOS](https://img.shields.io/badge/postmarketOS-edge-1a1b26?style=flat-square&logo=postmarketos&logoColor=9ece6a)
+![Hyprland](https://img.shields.io/badge/Hyprland-0.54-1a1b26?style=flat-square&logo=hyprland&logoColor=7aa2f7)
+![Device](https://img.shields.io/badge/SM--T735-Snapdragon_750G-1a1b26?style=flat-square&logo=samsung&logoColor=7aa2f7)
+![License](https://img.shields.io/badge/license-MIT_/_GPL--2.0-1a1b26?style=flat-square)
+
+![Desktop: fastfetch and btop on the Galaxy Tab S7 FE](docs/screenshots/desktop.jpg)
+
+- **Mainline kernel, not Android's** — display, touch, GPU (Adreno 619), Wi-Fi, Bluetooth, battery and charging all running on Linux 7.2.
+- **8 kernel patches** on top of the community port: SM5714 charger control written for this port, the community touchscreen driver wired up, and fixes for display corruption, power-off and battery reporting.
+- **Omarchy, ported to Alpine + touch** — the menu is generated from Omarchy's own definition file; Close/Back rows, a touch-friendly bar and an on-screen keyboard make it usable without a keyboard.
+- **A real dev box** — VSCodium with Python, Chromium, and Claude Code running natively on the tablet.
 
 > ⚠️ **Unlocking the bootloader wipes the tablet and trips Samsung Knox permanently** (Secure Folder, Samsung Pass/Wallet/Health stop working for good). Charging is basic (no fast charging). Read [Known limitations](#known-limitations) before you start.
+
+| Omarchy menu | Apps (touch) | Install submenu |
+|---|---|---|
+| ![Omarchy menu](docs/screenshots/menu.jpg) | ![App launcher with Close row](docs/screenshots/apps.jpg) | ![Install submenu with Back row](docs/screenshots/menu-install.jpg) |
 
 ## What works
 
@@ -16,9 +33,21 @@ Mainline Linux ([postmarketOS](https://postmarketos.org)) on the **Samsung Galax
 | Battery level | ✅ | SM5714 fuel gauge (level, status, voltage, current, temperature) |
 | Power off | ✅ | stays off **with the USB cable unplugged** |
 | USB networking / SSH over USB | ✅ | USB port defaults to device mode |
-| USB host (OTG) | ⚠️ | controller works, but **no 5 V VBUS** (SM5714 charger has no driver): use a powered OTG hub |
+| USB host (OTG) | ⚠️ | controller works, but the SM5714's 5 V boost (OTG mode) is not driven yet: use a powered OTG hub |
 | Charging | ✅ | basic SM5714 charger control at the stock limits (1.8 A in, 2.1 A, 4.38 V), temperature limits, watchdog; no fast charging (SM5440 direct charger / USB-PD) |
 | Audio, camera, S Pen, sensors | ❌ | not working yet |
+
+## Engineering notes
+
+The interesting part of this project was the debugging. A few of the problems, and how they were tracked down:
+
+- **Vertical streaks and broken glyphs.** The panel runs Display Stream Compression; the driver enabled DSC *block prediction*, which this panel decodes differently. Turning it off (patch 0004) fixed the picture, matching vishalbala-nps's upstream change.
+- **Power-off hung, the RTC was unreachable.** The mainline device tree put the PMK8350 PMIC at SPMI SID 0 — on top of the PM6350. Samsung's stock DTB shows it at SID 6. One `#define` (patch 0005) fixed power-off, a duplicate power-key controller and the real-time clock.
+- **Kernel panic on first boot: no `/sbin/init`.** The flashed image held an almost empty root filesystem. Cause: the desktop's automounter (`udiskie`) mounted pmbootstrap's loop partitions mid-build, so writes never reached the image file. Lesson: verify the image (inode count, `/sbin/init`) before it touches the device.
+- **Black screen with the backlight on.** Turning the display off made the touch driver pulse the reset line it shares with the panel (the FT8203 is one touch+display chip), and the panel was never re-initialised. The power button and idle now only drop the backlight.
+- **"Plugged in, still discharging."** The bootloader leaves the SM5714 charger at 500 mA while the screen alone draws ~1.5 A. Reading Samsung's GPL charger driver gave the register map and stock limits; patch 0008 applies them (1.8 A / 2.1 A / 4.38 V), follows Samsung's temperature rules, runs the charger watchdog, and reports charging from the charger's own status bits.
+- **VSCodium's terminal wouldn't open.** Alpine's package shipped `node-pty` with Windows and macOS binaries only; building it for musl/arm64 fixed it, and `tablet-update` rebuilds it after upgrades.
+- **The menu couldn't be closed by touch.** Logging showed taps outside the launcher never reach the bar while it is open, so Close/Back moved *into* the menu.
 
 ## What is in this repo
 
