@@ -115,7 +115,7 @@ SSH: `ssh user@samsung-gts7xllite.local` (avahi) or `ssh user@172.16.42.1` over 
 ## Known limitations
 
 - **No charging in Linux.** Linux reads the battery but cannot charge it. Charge in **Download mode** (the bootloader charges). With a cable plugged in, *power off* powers straight back on into Linux, so unplug first.
-- **Power button** turns only the screen off; the tablet keeps running.
+- **Power button** only turns the backlight off (and blocks touch); the tablet keeps running. DPMS is avoided on purpose: switching the panel off makes the FT8203 touch driver pulse the reset line it shares with the panel, and with the panel driver's `keep_powered` the display is not re-initialised, so it can stay black.
 - Only the **FocalTech FT8203** panel variant works.
 - Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the screen off.
 - `hyprland-guiutils` and Omarchy's walker/omarchy-shell are not packaged for Alpine; the menu uses fuzzel, the bar uses Waybar.

@@ -1,11 +1,18 @@
 #!/bin/sh
-# Power button: turn only the display off/on. Touch is disabled while the
-# display is off so taps in a pocket or bag don't reach apps.
+# Power button: screen dark/back on WITHOUT DPMS. Turning the display off goes
+# through drm_panel_unprepare, where the FT8203 touch follower asserts the reset
+# line it shares with the panel; with keep_powered the panel is never re-inited
+# and can stay black. So only the backlight goes to 0, and touch is blocked in
+# Hyprland (input disable does not touch the driver) while the screen is dark.
 touch_dev=focaltech-ft8203-touchscreen
-if hyprctl monitors -j | grep -q '"dpmsStatus": true'; then
+state=${XDG_RUNTIME_DIR:-/tmp}/tablet-display-off
+if [ ! -e "$state" ]; then
+  brightnessctl -c backlight -q -s
   hyprctl keyword "device[$touch_dev]:enabled" false >/dev/null
-  hyprctl dispatch dpms off >/dev/null
+  brightnessctl -c backlight -q set 0
+  touch "$state"
 else
-  hyprctl dispatch dpms on >/dev/null
+  brightnessctl -c backlight -q -r
   hyprctl keyword "device[$touch_dev]:enabled" true >/dev/null
+  rm -f "$state"
 fi
