@@ -45,7 +45,7 @@ EDIT_HYPR = "codium ~/.config/hypr/hyprland.conf"
 # (id, omarchy id for icon/label or None, label override, icon override, action)
 # A row without action is a submenu; its children are the rows whose id starts with "id.".
 MENU = [
-    ("apps", "apps", None, None, "pkill fuzzel; fuzzel"),
+    ("apps", "apps", None, None, "tablet-apps"),
     ("learn", "learn", None, None, None),
     ("learn.keybindings", "learn.keybindings", None, None, "tablet-keybindings"),
     ("learn.omarchy", "learn.omarchy", None, None, webapp("https://omarchy.org/manual/")),
@@ -173,6 +173,7 @@ echo $$ > "$pidfile"
 trap 'rm -f "$pidfile"' EXIT
 
 back_icon=$'\U000f004d'
+close_icon=$'\U000f0156'
 route=${1:-}
 
 while true; do
@@ -182,12 +183,17 @@ while true; do
   fi
   mapfile -t ids < <(children "$route")
   [[ ${#ids[@]} -eq 0 ]] && exit 1
-  # Submenus get a Back row on top: touch has no Escape key.
-  [[ -n $route ]] && ids=(__back__ "${ids[@]}")
+  # Touch has no Escape key, and taps outside fuzzel do not reach the bar while
+  # it is open: every menu gets Close on top, submenus also get Back.
+  if [[ -n $route ]]; then ids=(__close__ __back__ "${ids[@]}"); else ids=(__close__ "${ids[@]}"); fi
   idx=$(for id in "${ids[@]}"; do
-          if [[ $id == __back__ ]]; then printf '%s  Back\n' "$back_icon"
-          else printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}"; fi
+          case $id in
+            __close__) printf '%s  Close\n' "$close_icon" ;;
+            __back__) printf '%s  Back\n' "$back_icon" ;;
+            *) printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}" ;;
+          esac
         done | fuzzel --dmenu --index --prompt "$(title_of "$route")  " --lines "${#ids[@]}" --width 42)
+  [[ -n $idx && ${ids[$idx]} == __close__ ]] && exit 0
   if [[ -z $idx || ${ids[$idx]} == __back__ ]]; then
     [[ -z $route ]] && exit 0
     [[ $route == *.* ]] && route=${route%.*} || route=""
