@@ -47,13 +47,14 @@ The interesting part of this project was the debugging. A few of the problems, a
 - **Black screen with the backlight on.** Turning the display off made the touch driver pulse the reset line it shares with the panel (the FT8203 is one touch+display chip), and the panel was never re-initialised. The power button and idle now only drop the backlight.
 - **"Plugged in, still discharging."** The bootloader leaves the SM5714 charger at 500 mA while the screen alone draws ~1.5 A. Reading Samsung's GPL charger driver gave the register map and stock limits; patch 0008 applies them (1.8 A / 2.1 A / 4.38 V), follows Samsung's temperature rules, runs the charger watchdog, and reports charging from the charger's own status bits.
 - **VSCodium's terminal wouldn't open.** Alpine's package shipped `node-pty` with Windows and macOS binaries only; building it for musl/arm64 fixed it, and `tablet-update` rebuilds it after upgrades.
+- **White grain, then the screen went off.** Every backlight change is a DCS command sent over the DSI link, and some of them corrupt frames (`dsi_err_worker status=5`) until the next redraw; several in quick succession can hang the SoC. Idle now dims only after 15 minutes and brightness is never animated; the real fix belongs in the panel driver's timing of brightness writes.
 - **The menu couldn't be closed by touch.** Logging showed taps outside the launcher never reach the bar while it is open, so Close/Back moved *into* the menu.
 
 ## What is in this repo
 
 ```
 pmaports/device/testing/
-  linux-samsung-gts7xllite/     mainline 7.2 kernel + 7 patches (see below)
+  linux-samsung-gts7xllite/     mainline 7.2 kernel + 8 patches (see below)
   device-samsung-gts7xllite/    deviceinfo (boots from RECOVERY, rootfs in USERDATA)
   firmware-samsung-gts7xllite/  ADSP/CDSP/modem/Wi-Fi/GPU/touch firmware
 dotfiles/                       Hyprland, Waybar, fuzzel, Alacritty, mako, VSCodium... + tablet-* scripts
@@ -146,8 +147,9 @@ SSH: `ssh user@samsung-gts7xllite.local` (avahi) or `ssh user@172.16.42.1` over 
 
 - **Charging is basic**: up to about 9 W (5 V, 1.8 A) — no fast charging, the SM5440 direct charger and USB-PD negotiation are not driven. A laptop USB port gives less; with the screen on the battery may only hold or charge slowly. With a cable plugged in, *power off* powers straight back on into Linux, so unplug first.
 - **Power button** only turns the backlight off (and blocks touch); the tablet keeps running. DPMS is avoided on purpose: switching the panel off makes the FT8203 touch driver pulse the reset line it shares with the panel, and with the panel driver's `keep_powered` the display is not re-initialised, so it can stay black.
+- **Brightness changes can glitch the picture** (white grain until the next redraw) and, done rapidly, freeze the tablet. Change brightness in single steps; idle turns the backlight off after 15 minutes.
 - Only the **FocalTech FT8203** panel variant works.
-- Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the screen off.
+- Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the backlight off.
 - `hyprland-guiutils` and Omarchy's walker/omarchy-shell are not packaged for Alpine; the menu uses fuzzel, the bar uses Waybar.
 - Packages come from Alpine (musl): software built for glibc distributions usually does not run.
 
