@@ -1,0 +1,11 @@
+#!/bin/sh
+# Power button: turn only the display off/on. Touch is disabled while the
+# display is off so taps in a pocket or bag don't reach apps.
+touch_dev=focaltech-ft8203-touchscreen
+if hyprctl monitors -j | grep -q '"dpmsStatus": true'; then
+  hyprctl keyword "device[$touch_dev]:enabled" false >/dev/null
+  hyprctl dispatch dpms off >/dev/null
+else
+  hyprctl dispatch dpms on >/dev/null
+  hyprctl keyword "device[$touch_dev]:enabled" true >/dev/null
+fi

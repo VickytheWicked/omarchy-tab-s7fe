@@ -1,0 +1,20 @@
+#!/bin/bash
+# Alpine's vscodium package ships node-pty without a Linux binary, so the
+# integrated terminal cannot start. Build node-pty (same version VSCodium
+# bundles, N-API) and put pty.node where VSCodium loads it from.
+set -e
+P=/usr/lib/vscodium/resources/app/node_modules/node-pty
+[ -d "$P" ] || { echo "VSCodium not installed"; exit 0; }
+if [ -f "$P/build/Release/pty.node" ] && [ "${1:-}" != "--force" ]; then
+  echo "VSCodium terminal support already present."; exit 0
+fi
+ver=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$P/package.json" | head -1)
+echo "==> Building node-pty $ver for VSCodium"
+sudo apk add --no-interactive nodejs npm python3 make g++ linux-headers
+W=~/.cache/node-pty-build; rm -rf "$W"; mkdir -p "$W"; cd "$W"
+npm pack "node-pty@$ver" >/dev/null
+tar xzf node-pty-*.tgz; cd package
+npm install --ignore-scripts --no-audit --no-fund >/dev/null
+npx --yes node-gyp rebuild >/dev/null
+sudo install -D -m755 build/Release/pty.node "$P/build/Release/pty.node"
+echo "==> Installed $P/build/Release/pty.node. Restart VSCodium."

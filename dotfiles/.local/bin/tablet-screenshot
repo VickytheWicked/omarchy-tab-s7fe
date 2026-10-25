@@ -1,0 +1,10 @@
+#!/bin/sh
+# Screenshot like Omarchy's capture: save to ~/Pictures/Screenshots and copy to clipboard.
+dir=~/Pictures/Screenshots; mkdir -p "$dir"
+file="$dir/screenshot-$(date +%Y-%m-%d_%H-%M-%S).png"
+case "${1:-region}" in
+  full) grim "$file" ;;
+  *) geom=$(slurp) || exit 0; grim -g "$geom" "$file" ;;
+esac
+wl-copy < "$file"
+notify-send "Screenshot saved" "$file (copied to clipboard)"

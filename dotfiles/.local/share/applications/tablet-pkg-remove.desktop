@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Remove package
+Comment=Remove packages you installed
+Exec=alacritty -e tablet-pkg-remove
+Icon=edit-delete
+Terminal=false

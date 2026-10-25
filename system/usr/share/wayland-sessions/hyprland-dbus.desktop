@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Hyprland (D-Bus session)
+Comment=Hyprland inside dbus-run-session, for tinydm autologin
+Exec=dbus-run-session /usr/bin/start-hyprland
+Type=Application
+DesktopNames=Hyprland

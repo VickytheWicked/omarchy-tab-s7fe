@@ -1,0 +1,28 @@
+#!/bin/sh
+# Update the tablet: apk upgrade, then copy a changed /boot/boot.img to RECOVERY
+# (Linux boots from RECOVERY; mkinitfs/kernel updates only rewrite /boot/boot.img).
+set -e
+before=$(sha256sum /boot/boot.img | cut -d' ' -f1)
+sudo apk update
+sudo apk upgrade -a
+after=$(sha256sum /boot/boot.img | cut -d' ' -f1)
+# Alpine's vscodium ships node-pty without a Linux binary; rebuild it after upgrades
+if [ -d /usr/lib/vscodium ] && [ ! -f /usr/lib/vscodium/resources/app/node_modules/node-pty/build/Release/pty.node ]; then
+  tablet-fix-vscodium-terminal || echo "!!! Could not rebuild the VSCodium terminal; run tablet-fix-vscodium-terminal" >&2
+fi
+if [ "$before" = "$after" ]; then
+  echo "==> Boot image unchanged; RECOVERY left as is."
+  exit 0
+fi
+echo "==> Boot image changed; writing it to RECOVERY"
+sudo cp /boot/boot.img /boot/boot.img.prev-update
+sudo dd if=/boot/boot.img of=/dev/disk/by-partlabel/recovery bs=4M conv=fsync
+sync
+size=$(stat -c %s /boot/boot.img)
+written=$(sudo head -c "$size" /dev/disk/by-partlabel/recovery | sha256sum | cut -d' ' -f1)
+if [ "$written" = "$after" ]; then
+  echo "==> RECOVERY verified ($after). Restart to use it."
+else
+  echo "!!! RECOVERY does not match /boot/boot.img - do not restart; ask for help." >&2
+  exit 1
+fi

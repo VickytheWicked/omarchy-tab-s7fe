@@ -1,0 +1,21 @@
+#!/bin/sh
+# Switch the USB-C port between host (OTG keyboard/mouse) and device (cable to
+# the laptop: USB networking/SSH). The port has no role detection yet.
+# usage: tablet-usb-mode host|device|toggle|status
+sw=$(ls -d /sys/class/usb_role/*/ 2>/dev/null | head -1)
+[ -n "$sw" ] || { notify-send "USB" "No USB role switch found" 2>/dev/null; echo "no usb_role switch" >&2; exit 1; }
+cur=$(cat "$sw/role")
+case "${1:-toggle}" in
+  host) new=host ;;
+  device) new=device ;;
+  toggle) [ "$cur" = host ] && new=device || new=host ;;
+  status) echo "$cur"; exit 0 ;;
+  *) echo "usage: $0 host|device|toggle|status" >&2; exit 2 ;;
+esac
+echo "$new" | sudo -n tee "$sw/role" >/dev/null
+case "$new" in
+  host) msg="Host mode: plug in an OTG keyboard, mouse or drive" ;;
+  device) msg="Device mode: cable to the laptop (SSH over USB)" ;;
+esac
+notify-send "USB: $new" "$msg" 2>/dev/null
+echo "$cur -> $(cat "$sw/role")"

@@ -1,0 +1,115 @@
+# Firmware for Samsung Galaxy Tab S7 FE LTE (SM-T735), SM7225.
+#
+# Blobs extracted from stock firmware and published in
+# vishalbala-nps/firmware-samsung-gts7xllite. The touchscreen PRAM firmware
+# comes from Marker284/samsung-gts7xllite-display-touch (downloaded, pinned commit).
+maintainer="Vansh <rupeshvansh84@gmail.com>"
+pkgname=firmware-samsung-gts7xllite
+pkgver=20261016
+pkgrel=0
+pkgdesc="Firmware for Samsung Galaxy Tab S7 FE LTE"
+subpackages="
+	$pkgname-adreno
+	$pkgname-adsp
+	$pkgname-cdsp
+	$pkgname-hexagonfs
+	$pkgname-ipa
+	$pkgname-modem
+	$pkgname-touchscreen
+	$pkgname-wlan
+	"
+url="https://github.com/vishalbala-nps/firmware-samsung-gts7xllite"
+arch="aarch64"
+license="proprietary"
+makedepends="pil-squasher"
+options="!check !strip !archcheck !tracedeps textrels pmb:cross-native"
+_commit="50f6bd87996159b702cd91b3c416a9377c353089"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/vishalbala-nps/firmware-samsung-gts7xllite/archive/$_commit.tar.gz
+	ft8203_gts7xllite.bin::https://raw.githubusercontent.com/Marker284/samsung-gts7xllite-display-touch/7587a54838ba6678ab7b8da534ef7dd0d6504dfd/firmware/tsp_focaltech/ft8203_gts7xllite.bin
+	"
+builddir="$srcdir/firmware-samsung-gts7xllite-$_commit"
+
+_fwdir="usr/lib/firmware/qcom/sm7225/Samsung/gts7xllite"
+
+build() {
+	for i in *.mdt; do
+		pil-squasher "$(basename "$i" .mdt)".mbn "$i"
+	done
+}
+
+package() {
+	# parent package is empty
+	mkdir -p "$pkgdir"
+}
+
+adreno() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE adreno firmware"
+
+	install -Dm644 "$builddir"/a619_gmu.bin -t "$subpkgdir/usr/lib/firmware/qcom/"
+	install -Dm644 "$builddir"/a615_zap.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+adsp() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE adsp firmware"
+
+	install -Dm644 "$builddir"/adsp.mbn -t "$subpkgdir/$_fwdir/"
+	install -Dm644 "$builddir"/adsp*.jsn -t "$subpkgdir/$_fwdir/"
+}
+
+cdsp() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE cdsp firmware"
+
+	install -Dm644 "$builddir"/cdsp.mbn -t "$subpkgdir/$_fwdir/"
+	install -Dm644 "$builddir"/cdsp*.jsn -t "$subpkgdir/$_fwdir/"
+}
+
+hexagonfs() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE hexagonfs files"
+
+	mkdir -p "$subpkgdir"/usr/share/qcom/sm7225/Samsung/
+	cp -r "$builddir"/hexagonfs/ \
+		"$subpkgdir"/usr/share/qcom/sm7225/Samsung/gts7xllite
+
+	# acdb and dsp are only needed once audio is wired up
+	rm -rf "$subpkgdir"/usr/share/qcom/sm7225/Samsung/gts7xllite/acdb/
+	rm -rf "$subpkgdir"/usr/share/qcom/sm7225/Samsung/gts7xllite/dsp/
+
+	find "$subpkgdir/usr/share/qcom/sm7225/Samsung/gts7xllite/" \
+		-type f -exec chmod 0644 {} \;
+}
+
+ipa() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE ipa firmware"
+
+	# The DT asks for lagoon_ipa_fws.mbn by that exact name, unlike FP4.
+	install -Dm644 "$builddir"/lagoon_ipa_fws.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+modem() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE modem firmware"
+
+	install -Dm644 "$builddir"/modem.mbn -t "$subpkgdir/$_fwdir/"
+	install -Dm644 "$builddir"/modem*.jsn -t "$subpkgdir/$_fwdir/"
+
+	cp -r "$builddir"/modem_pr/ "$subpkgdir/$_fwdir/"
+	find "$subpkgdir/$_fwdir/" -type f -exec chmod 0644 {} \;
+}
+
+touchscreen() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE FT8203 touchscreen firmware"
+
+	install -Dm644 "$srcdir"/ft8203_gts7xllite.bin \
+		-t "$subpkgdir/usr/lib/firmware/tsp_focaltech/"
+}
+
+wlan() {
+	pkgdesc="Samsung Galaxy Tab S7 FE LTE wlan firmware"
+
+	install -Dm644 "$builddir"/wlanmdsp.mbn -t "$subpkgdir/$_fwdir/"
+}
+
+sha512sums="
+50cc3fb4ce78c9c72d9a60e3de0b3b2a351048002eb810cf43f6be7f930c541b51eca4f3de2f8f7b6a45a5a65a5ce8536536a663aa4d597b7c1d87cf3d15298f  firmware-samsung-gts7xllite-50f6bd87996159b702cd91b3c416a9377c353089.tar.gz
+14786fb724c24e14498c5c1ac287eb69e419c3a3ea88e281c60585ee8d5030c8bd22598e7d2156cdd7e57b87d263b888d0ca0888f7f48794898114dba1062da4  ft8203_gts7xllite.bin
+"

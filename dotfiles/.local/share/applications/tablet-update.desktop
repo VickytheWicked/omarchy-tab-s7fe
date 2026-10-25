@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Update system
+Comment=Upgrade all packages and keep RECOVERY in sync
+Exec=alacritty -e bash -c "tablet-update; echo; read -n 1 -s -r -p \"Press any key to close...\""
+Icon=system-software-update
+Terminal=false

@@ -1,0 +1,35 @@
+From 7edc0140fadc9257a5dc60d853f029e985ad759f Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Sun, 25 Oct 2026 02:47:51 +0530
+Subject: [PATCH] arm64: dts: qcom: sm7225-samsung-gts7xllite: OTG with manual
+ USB role switch
+
+No ID pin or Type-C role detection yet (the SM5714 handles Type-C on this tablet), so expose a usb-role-switch and start as peripheral; userspace switches to host via /sys/class/usb_role. VBUS for host mode also comes from the SM5714, which has no driver yet.
+---
+ arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+index cf472e5..b0fc7ef 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+@@ -704,8 +704,14 @@
+ 
+ &usb_1_dwc3 {
+ 	maximum-speed = "super-speed";
+-	/* role detection does not work here; peripheral keeps USB networking up */
+-	dr_mode = "peripheral";
++	/*
++	 * No ID pin / Type-C role detection yet, so the role is switched by hand
++	 * through /sys/class/usb_role. Start as a device so USB networking (SSH
++	 * over the cable) comes up; switch to host for an OTG keyboard or mouse.
++	 */
++	dr_mode = "otg";
++	usb-role-switch;
++	role-switch-default-mode = "peripheral";
+ 	phys = <&usb_1_hsphy>, <&usb_1_qmpphy QMP_USB43DP_USB3_PHY>;
+ 	phy-names = "usb2-phy", "usb3-phy";
+ };
+-- 
+2.55.0
+

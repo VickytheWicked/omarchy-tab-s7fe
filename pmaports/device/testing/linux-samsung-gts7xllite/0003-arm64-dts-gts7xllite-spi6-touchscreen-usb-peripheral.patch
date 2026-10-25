@@ -1,0 +1,86 @@
+From 1e6f5ccae26c7c4cfc55e8e8f126c737bf22e60b Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Sat, 24 Oct 2026 21:49:33 +0530
+Subject: [PATCH 3/3] arm64: dts: qcom: sm7225-samsung-gts7xllite: add SPI6,
+ touchscreen, force USB peripheral mode
+
+Touchscreen node from Marker284/samsung-gts7xllite-display-touch @ 7587a54; SE6 described as SPI (stock qupv3_se6_spi, CS tlmm 16).
+---
+ .../dts/qcom/sm7225-samsung-gts7xllite.dts    | 54 ++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+index f4a5d29..44f4f37 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+@@ -470,6 +470,57 @@
+ 	remote-endpoint = <&panel_in>;
+ };
+ 
++&qupv3_id_1 {
++	/*
++	 * QUP SE6 runs as SPI on this tablet (stock: qupv3_se6_spi, 980000.spi);
++	 * sm6350.dtsi only describes it as i2c6, which stays disabled.
++	 */
++	spi6: spi@980000 {
++		compatible = "qcom,geni-spi";
++		reg = <0x0 0x00980000 0x0 0x4000>;
++		clock-names = "se";
++		clocks = <&gcc GCC_QUPV3_WRAP1_S0_CLK>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&qup_spi6_default>;
++		interrupts = <GIC_SPI 353 IRQ_TYPE_LEVEL_HIGH>;
++		dmas = <&gpi_dma1 0 0 QCOM_GPI_SPI>,
++		       <&gpi_dma1 1 0 QCOM_GPI_SPI>;
++		dma-names = "tx", "rx";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		interconnects = <&clk_virt MASTER_QUP_CORE_1 0 &clk_virt SLAVE_QUP_CORE_1 0>,
++				<&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_QUP_1 0>;
++		interconnect-names = "qup-core", "qup-config";
++	};
++};
++
++&tlmm {
++	qup_spi6_default: qup-spi6-default-state {
++		pins = "gpio13", "gpio14", "gpio15", "gpio16";
++		function = "qup10";
++		drive-strength = <6>;
++		bias-disable;
++	};
++};
++
++&spi6 {
++	status = "okay";
++
++	touchscreen@0 {
++		compatible = "focaltech,ft8203-ts";
++		reg = <0>;
++		spi-max-frequency = <7000000>;
++
++		interrupts-extended = <&tlmm 22 IRQ_TYPE_EDGE_FALLING>;
++		reset-gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
++
++		panel = <&panel>;
++
++		touchscreen-size-x = <1600>;
++		touchscreen-size-y = <2560>;
++	};
++};
++
+ &mdss_dsi0_phy {
+ 	vdds-supply = <&vreg_l18a>;
+ 	status = "okay";
+@@ -638,7 +689,8 @@
+ 
+ &usb_1_dwc3 {
+ 	maximum-speed = "super-speed";
+-	dr_mode = "otg";
++	/* role detection does not work here; peripheral keeps USB networking up */
++	dr_mode = "peripheral";
+ 	phys = <&usb_1_hsphy>, <&usb_1_qmpphy QMP_USB43DP_USB3_PHY>;
+ 	phy-names = "usb2-phy", "usb3-phy";
+ };
+-- 
+2.55.0
+

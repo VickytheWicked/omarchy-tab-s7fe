@@ -1,0 +1,25 @@
+#!/bin/bash
+# Fuzzy-finder TUI for removing packages you installed, like omarchy-pkg-remove.
+# Packages the tablet needs to boot are left out of the list.
+
+protected='^(alpine-base.*|musl.*|postmarketos-.*|device-samsung-gts7xllite|linux-samsung-gts7xllite|firmware-samsung-gts7xllite.*|linux-firmware-.*|mkbootimg|openrc|busybox.*|apk-tools|sudo.*|openssh.*|networkmanager.*|elogind.*|polkit-elogind|seatd.*|tinydm.*|dbus.*|hyprland|waybar|fuzzel|bash|fzf)$'
+
+fzf_args=(
+  --multi
+  --preview 'apk info -d -s -w {1} 2>/dev/null'
+  --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select'
+  --preview-label-pos='bottom'
+  --preview-window 'down:65%:wrap'
+  --bind 'alt-p:toggle-preview'
+  --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up'
+  --bind 'alt-k:preview-up,alt-j:preview-down'
+  --color 'pointer:red,marker:red'
+)
+
+pkg_names=$(sed 's/[<>=~].*//' /etc/apk/world | grep -vE "$protected" | sort -u | fzf "${fzf_args[@]}")
+
+if [[ -n $pkg_names ]]; then
+  echo "$pkg_names" | tr '\n' ' ' | xargs sudo apk del
+  echo
+  read -n 1 -s -r -p "Done! Press any key to close..."
+fi

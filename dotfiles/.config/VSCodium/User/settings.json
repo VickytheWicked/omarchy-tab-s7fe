@@ -1,0 +1,15 @@
+{
+  "workbench.colorTheme": "Tokyo Night",
+  "editor.fontFamily": "'JetBrainsMono Nerd Font', monospace",
+  "editor.fontSize": 14,
+  "editor.fontLigatures": true,
+  "terminal.integrated.fontFamily": "'JetBrainsMono Nerd Font'",
+  "window.titleBarStyle": "custom",
+  "window.menuBarVisibility": "toggle",
+  "workbench.startupEditor": "none",
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "python.languageServer": "None",
+  "basedpyright.analysis.typeCheckingMode": "standard",
+  "python.terminal.activateEnvironment": true
+}

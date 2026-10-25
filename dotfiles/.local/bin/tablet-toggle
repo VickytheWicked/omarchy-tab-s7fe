@@ -1,0 +1,19 @@
+#!/bin/sh
+# Omarchy-style toggles used by tablet-menu and keybindings.
+case "$1" in
+  idle)
+    if pgrep -x hypridle >/dev/null; then pkill -x hypridle; notify-send "Stay awake" "Screen will not turn off"
+    else setsid -f hypridle >/dev/null 2>&1; notify-send "Stay awake off" "Screen turns off after 5 minutes"; fi ;;
+  notifications)
+    makoctl mode -t do-not-disturb >/dev/null
+    if makoctl mode | grep -q do-not-disturb; then echo silenced >/dev/null; else notify-send "Notifications" "On"; fi ;;
+  gaps)
+    if [ "$(hyprctl getoption general:gaps_out -j | grep -o '"custom": *"[^"]*"' | grep -o '[0-9]\+' | head -1)" = "0" ]; then
+      hyprctl --batch "keyword general:gaps_in 5; keyword general:gaps_out 10" >/dev/null
+    else
+      hyprctl --batch "keyword general:gaps_in 0; keyword general:gaps_out 0" >/dev/null
+    fi ;;
+  restart-nightlight)
+    if pgrep -x hyprsunset >/dev/null; then pkill -x hyprsunset; setsid -f hyprsunset -t 4000 >/dev/null 2>&1; fi ;;
+  *) echo "usage: $0 idle|notifications|gaps|restart-nightlight" >&2; exit 2 ;;
+esac

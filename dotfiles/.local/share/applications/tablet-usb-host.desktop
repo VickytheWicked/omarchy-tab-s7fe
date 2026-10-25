@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=USB: host mode (keyboard/mouse)
+Comment=Switch the USB-C port to host for OTG devices
+Exec=tablet-usb-mode host
+Icon=input-keyboard
+Terminal=false

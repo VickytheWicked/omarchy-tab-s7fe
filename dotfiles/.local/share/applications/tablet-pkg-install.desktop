@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Install package
+Comment=Search and install packages (like Omarchy)
+Exec=alacritty -e tablet-pkg-install
+Icon=system-software-install
+Terminal=false

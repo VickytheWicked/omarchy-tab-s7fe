@@ -1,0 +1,44 @@
+# Reference: <https://nura.eco/deviceinfo>
+# Please use double quotes only. You can source this file in shell
+# scripts.
+# Samsung Galaxy Tab S7 FE LTE (SM-T735), SM7225 "lagoon".
+# The Wi-Fi variant (SM-T733 / SM-T730) is SM7325 and is a separate port.
+
+deviceinfo_format_version="0"
+deviceinfo_name="Samsung Galaxy Tab S7 FE LTE"
+deviceinfo_manufacturer="Samsung"
+deviceinfo_codename="samsung-gts7xllite"
+deviceinfo_year="2021"
+deviceinfo_dtb="qcom/sm7225-samsung-gts7xllite"
+deviceinfo_append_dtb="true"
+deviceinfo_arch="aarch64"
+
+# Device related
+deviceinfo_drm="true"
+deviceinfo_chassis="tablet"
+deviceinfo_external_storage="true"
+# Panel is 2560x1600 but mounted in portrait: native mode is 1600x2560.
+deviceinfo_screen_width="1600"
+deviceinfo_screen_height="2560"
+
+# Bootloader related
+# Values from the stock boot.img of T735XXS9DYF1.
+# Linux boots from RECOVERY; Android keeps BOOT. Rootfs goes to USERDATA.
+deviceinfo_flash_method="heimdall-bootimg"
+deviceinfo_flash_heimdall_partition_kernel="RECOVERY"
+deviceinfo_flash_heimdall_partition_rootfs="USERDATA"
+deviceinfo_flash_heimdall_partition_vbmeta="VBMETA"
+deviceinfo_bootimg_append_seandroidenforce="true"
+deviceinfo_rootfs_image_sector_size="4096"
+# odin4 writes USERDATA from a sparse image, like the stock userdata.img
+deviceinfo_flash_sparse="true"
+deviceinfo_kernel_cmdline="console=tty0 ignore_loglevel loglevel=8 fbcon=nodefer clk_ignore_unused pd_ignore_unused panel_ft8203_ts124qdm_wqxga.slice_per_pkt=2 panel_ft8203_ts124qdm_wqxga.traffic=2"
+deviceinfo_generate_bootimg="true"
+deviceinfo_header_version="2"
+deviceinfo_flash_pagesize="4096"
+deviceinfo_flash_offset_base="0x00000000"
+deviceinfo_flash_offset_kernel="0x00008000"
+deviceinfo_flash_offset_ramdisk="0x02000000"
+deviceinfo_flash_offset_second="0x00000000"
+deviceinfo_flash_offset_tags="0x01e00000"
+deviceinfo_flash_offset_dtb="0x01f00000"

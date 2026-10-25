@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=USB: device mode (laptop cable)
+Comment=Switch the USB-C port back to device mode for SSH over USB
+Exec=tablet-usb-mode device
+Icon=computer
+Terminal=false

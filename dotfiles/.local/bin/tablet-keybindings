@@ -1,0 +1,6 @@
+#!/bin/sh
+# Searchable list of the Hyprland keybindings (Super+K), like omarchy-menu-keybindings.
+grep -E '^bind[a-z]* *=' ~/.config/hypr/hyprland.conf \
+  | sed -E 's/^bind[a-z]* *= *//; s/code:1([0-8])/\1/; s/code:19/0/; s/code:20/-/; s/code:21/=/' \
+  | awk -F', *' '{mods=$1; key=$2; $1=""; $2=""; sub(/^ +/, ""); printf "%-22s %s\n", (mods=="" ? key : mods " + " key), $0}' \
+  | fuzzel --dmenu --prompt "󰌌  " --width 70 --lines 20 >/dev/null

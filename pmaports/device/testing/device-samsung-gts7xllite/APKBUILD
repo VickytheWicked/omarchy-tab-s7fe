@@ -1,0 +1,48 @@
+# Reference: <https://nura.eco/devicepkg>
+maintainer="Vansh <rupeshvansh84@gmail.com>"
+pkgname=device-samsung-gts7xllite
+pkgdesc="Samsung Galaxy Tab S7 FE LTE"
+pkgver=1
+pkgrel=2
+url="https://nura.eco"
+license="MIT"
+arch="aarch64"
+options="!check !archcheck"
+depends="
+	firmware-qcom-adreno-a630-sqe
+	firmware-samsung-gts7xllite-adreno
+	firmware-samsung-gts7xllite-adsp
+	firmware-samsung-gts7xllite-cdsp
+	firmware-samsung-gts7xllite-hexagonfs
+	firmware-samsung-gts7xllite-ipa
+	firmware-samsung-gts7xllite-modem
+	firmware-samsung-gts7xllite-touchscreen
+	firmware-samsung-gts7xllite-wlan
+	hexagonrpcd
+	linux-firmware-ath10k
+	linux-firmware-qca
+	linux-samsung-gts7xllite
+	make-dynpart-mappings
+	mkbootimg
+	postmarketos-base
+	soc-qcom
+	soc-qcom-modem
+"
+makedepends="devicepkg-dev"
+source="
+	deviceinfo
+	modules-initfs
+"
+
+build() {
+	devicepkg_build $startdir $pkgname
+}
+
+package() {
+	devicepkg_package $startdir $pkgname
+}
+
+sha512sums="
+2bbce515be8ff6e7adace31d982fb25ea4da37c251258af008a84e26addccdd147c735242d16f3a0e242409bfb613398c733895335842e7da9d4a0dfe6df0441  deviceinfo
+0a7d3427298a0da1f59cd9e9b255877b9c81d9073d849a9440caf72c0ed4d611cc97a0eb18891116d9d3ad53ad65499ce2b5ef5a3a0ea1080e7bb5a5014fe111  modules-initfs
+"

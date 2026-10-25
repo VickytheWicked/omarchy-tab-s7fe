@@ -1,0 +1,6 @@
+# build and scratch
+*.img
+*.tar
+*.apk
+*.tgz
+__pycache__/

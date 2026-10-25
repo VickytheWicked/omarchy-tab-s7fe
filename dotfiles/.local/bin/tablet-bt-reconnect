@@ -1,0 +1,13 @@
+#!/bin/sh
+# Reconnect every paired + trusted Bluetooth device that is not connected yet
+# (keyboard, mouse). Run at Hyprland start; safe to run any time.
+bluetoothctl power on >/dev/null 2>&1
+for i in 1 2 3; do
+  for mac in $(bluetoothctl devices Paired 2>/dev/null | awk '{print $2}'); do
+    info=$(bluetoothctl info "$mac" 2>/dev/null)
+    echo "$info" | grep -q "Trusted: yes" || continue
+    echo "$info" | grep -q "Connected: yes" && continue
+    timeout 10 bluetoothctl connect "$mac" >/dev/null 2>&1
+  done
+  sleep 5
+done

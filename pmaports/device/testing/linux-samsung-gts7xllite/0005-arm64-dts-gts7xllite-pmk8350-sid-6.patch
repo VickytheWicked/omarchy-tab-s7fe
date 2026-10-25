@@ -1,0 +1,37 @@
+From 67a1809c1401ee532352fa1fe7aedaa51b7ac997 Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Sun, 25 Oct 2026 01:48:28 +0530
+Subject: [PATCH] arm64: dts: qcom: sm7225-samsung-gts7xllite: PMK8350 is SID 6
+
+Stock DT has PM6350 on SID 0 (PON with power key, resin, system reset) and PMK8350 on SID 6 (RTC only). With the default SID 0 the PMK8350 PON and RTC landed on top of the PM6350: duplicate qcom-pon reboot-mode, failed PON probe, unreachable RTC.
+---
+ arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+index 44f4f37..296d74e 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+@@ -18,6 +18,12 @@
+ #include "sm7225.dtsi"
+ #include "pm6150l.dtsi"
+ #include "pm6350.dtsi"
++/*
++ * Stock DT: PM6350 is SID 0 (its PON does power key, resin and system reset),
++ * PMK8350 is SID 6 and only provides the RTC. The default SID 0 put a phantom
++ * PMK8350 PON and RTC on top of the PM6350.
++ */
++#define PMK8350_SID 6
+ #include "pmk8350.dtsi"
+ 
+ /delete-node/ &pil_adsp_mem;
+@@ -720,3 +726,6 @@
+ 	status = "okay";
+ };
+ 
++&pmk8350_pon {
++	status = "disabled";
++};
+-- 
+2.55.0
+

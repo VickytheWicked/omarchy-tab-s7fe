@@ -1,0 +1,95 @@
+# Kernel for Samsung Galaxy Tab S7 FE LTE (SM-T735), SM7225.
+#
+# Based on vishalbala-nps/linux (fork of sm6350-mainline/linux), `panel` branch,
+# which carries sm7225-samsung-gts7xllite.dts and the FT8203 panel driver.
+# Touchscreen driver and panel fixes come from
+# Marker284/samsung-gts7xllite-display-touch. Config starts from
+# linux-postmarketos-qcom-sm6350 (same 7.2 base).
+maintainer="Vansh <rupeshvansh84@gmail.com>"
+_flavor="samsung-gts7xllite"
+pkgname=linux-$_flavor
+pkgver=7.2.0
+pkgrel=4
+pkgdesc="Mainline kernel fork for Samsung Galaxy Tab S7 FE LTE (SM7225)"
+arch="aarch64"
+_carch="arm64"
+url="https://github.com/vishalbala-nps/linux"
+license="GPL-2.0-only"
+options="!strip !check !tracedeps
+	pmb:cross-native
+	pmb:kconfigcheck-community
+	"
+makedepends="
+	bison
+	clang
+	elfutils-dev
+	findutils
+	flex
+	installkernel
+	linux-headers
+	lld
+	llvm
+	openssl-dev
+	pahole
+	perl
+	python3
+	zstd
+"
+
+# Tip of the `panel` branch: "Disable PPS as Panel is not using it anyways"
+_commit="bc46d64b51988485fbaafdb24a80e3148bf1f0a3"
+_config="config-$_flavor.$arch"
+
+source="
+	linux-$_commit.tar.gz::https://github.com/vishalbala-nps/linux/archive/$_commit.tar.gz
+	$_config
+	0001-input-add-focaltech-ft8203-touchscreen.patch
+	0002-drm-panel-ft8203-stability-fixes.patch
+	0003-arm64-dts-gts7xllite-spi6-touchscreen-usb-peripheral.patch
+	0004-drm-panel-ft8203-dsc-block-prediction-off.patch
+	0005-arm64-dts-gts7xllite-pmk8350-sid-6.patch
+	0006-power-supply-add-sm5714-fuel-gauge.patch
+	0007-arm64-dts-gts7xllite-otg-role-switch.patch
+"
+builddir="$srcdir/linux-$_commit"
+
+prepare() {
+	default_prepare
+	cp "$srcdir"/$_config .config
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))-$_flavor"
+}
+
+package() {
+	# GZIP'd kernel image for boot.img (header v2, Samsung ABL)
+	install -Dm644 "$builddir/arch/$_carch/boot/vmlinuz" \
+		"$pkgdir/boot/vmlinuz"
+
+	make modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_PATH="$pkgdir"/boot/ \
+		INSTALL_MOD_PATH="$pkgdir"/usr \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	rm -f "$pkgdir"/lib/modules/*/build "$pkgdir"/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/$_flavor/kernel.release
+}
+
+sha512sums="
+c59c7fb90c85894b3c5c3a7d1dc2bf8a470758dfaaa6adaa97edb517052d67ca7f2a31468670c6c5c9b5c9e4f7bb9453bb03c6cf03a77bdfac44850140cdae54  linux-bc46d64b51988485fbaafdb24a80e3148bf1f0a3.tar.gz
+a7b930049ce43bc3a24f9b42336acc1981d7fb2bce8e7b82b91c90aac4b641ef2c11d3dd84c4f8bcbcd0c55285280278de3371649883b995838d60872592e573  config-samsung-gts7xllite.aarch64
+9968eaea20e1f3717f84e2675981c59a6f5be78624b0776006b0fe29d5f4d1657fc28223ac8235a0986d15a4387a32b715af929ce692a9c07965b5a58c0ca5f9  0001-input-add-focaltech-ft8203-touchscreen.patch
+82afbbfbb5ff190ba30c87fa842c5021d64bc0b296fdfcccd3ec4b05d26b59e443a9e41725f5643570a8d79605fd08f6dc969b1f927fee8de2b0cc8eb61f213a  0002-drm-panel-ft8203-stability-fixes.patch
+243ecc1c8261cf67414f04da75c7a1f17d5e2a575a78bfac4e44635ddfedd1c704e320a1f70ae913fce067c15d5d25b00e444a9a81d575adb73095db00aef069  0003-arm64-dts-gts7xllite-spi6-touchscreen-usb-peripheral.patch
+997ee481cbc87b43062cfc15bd0712d6aa554e02490f4ec020de0f15e7d99136c7d218d82c3f691a4849d5b9e2e0e523632e1852d87741349767c38058b9cf91  0004-drm-panel-ft8203-dsc-block-prediction-off.patch
+92b986a2c51b01840bd895c9cf76b00e84f5721bb1fead941d95ed2cce6b72da7326e9805f64dc58d5fc5e95fa315345c9e1fc135ba11724bea8f2edeee27c7e  0005-arm64-dts-gts7xllite-pmk8350-sid-6.patch
+df8e2edb31404f31ce9722b52810be0a345de8df6bfde6790cc7db3677e0e325ef7e99b611986cb6ae110633a067a37e62d8f82645e535533d1008680424af40  0006-power-supply-add-sm5714-fuel-gauge.patch
+639b3c651316f8b60ae7b4914b6ee20db8e874a38bb8d8c5131ba580c486c00b48a10ac2726f1f9cbd004c53611c83af1f2f95299ae1c082f4659c553b7b9e54  0007-arm64-dts-gts7xllite-otg-role-switch.patch
+"

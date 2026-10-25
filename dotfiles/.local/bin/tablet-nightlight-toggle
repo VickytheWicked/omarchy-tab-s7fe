@@ -1,0 +1,9 @@
+#!/bin/sh
+# Toggle a warm night light (Super+Ctrl+N), like Omarchy's nightlight toggle.
+if pgrep -x hyprsunset >/dev/null; then
+  pkill -x hyprsunset
+  notify-send "Night light off" 2>/dev/null
+else
+  setsid hyprsunset -t 4000 >/dev/null 2>&1 &
+  notify-send "Night light on" 2>/dev/null
+fi

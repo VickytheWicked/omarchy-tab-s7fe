@@ -1,0 +1,43 @@
+From 9711ad1bb021604713db29ba2754da23fcadbb9e Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Sun, 25 Oct 2026 01:21:56 +0530
+Subject: [PATCH] drm/panel: ft8203: turn DSC block prediction off by default
+
+Block prediction produces vertical streaks and broken glyphs on SM-T735. vishalbala-nps/linux disabled it too. Add a block_pred module parameter to try it again.
+---
+ drivers/gpu/drm/panel/panel-ft8203-ts124qdm-wqxga.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-ft8203-ts124qdm-wqxga.c b/drivers/gpu/drm/panel/panel-ft8203-ts124qdm-wqxga.c
+index 8437ebe..671d9fa 100644
+--- a/drivers/gpu/drm/panel/panel-ft8203-ts124qdm-wqxga.c
++++ b/drivers/gpu/drm/panel/panel-ft8203-ts124qdm-wqxga.c
+@@ -39,6 +39,16 @@ MODULE_PARM_DESC(traffic, "DSI traffic mode: 0=sync event, 1=sync pulse, 2=burst
+  */
+ static int slice_per_pkt = 2;
+ module_param(slice_per_pkt, int, 0644);
++
++/*
++ * Block prediction on corrupts the picture on this panel: vertical streaks and
++ * broken glyphs, i.e. the DDIC decodes something other than what DPU encoded.
++ * vishalbala-nps/linux turned it off for the same reason ("Disable Block
++ * prediction in PPS"). Kept as a parameter so it can be tried from the cmdline.
++ */
++static bool block_pred;
++module_param(block_pred, bool, 0444);
++MODULE_PARM_DESC(block_pred, "DSC block prediction (default off, corrupts output when on)");
+ MODULE_PARM_DESC(slice_per_pkt, "DSC slices per DSI packet (stock uses 2)");
+ 
+ /*
+@@ -689,7 +699,7 @@ static int ft8203_ts124qdm_wqxga_probe(struct mipi_dsi_device *dsi)
+ 	ctx->dsc.slice_count = 2;
+ 	ctx->dsc.bits_per_component = 8;
+ 	ctx->dsc.bits_per_pixel = 8 << 4;
+-	ctx->dsc.block_pred_enable = true;
++	ctx->dsc.block_pred_enable = block_pred;
+ 	if (!no_dsc) {
+ 		dsi->dsc = &ctx->dsc;
+ 		dsi->dsc_slice_per_pkt = slice_per_pkt;
+-- 
+2.55.0
+

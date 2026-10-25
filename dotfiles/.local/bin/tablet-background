@@ -1,0 +1,7 @@
+#!/bin/bash
+# Pick a wallpaper (like Omarchy's background switcher); remembered via the 'current' link.
+dir=~/.local/share/wallpapers
+pick=$(cd "$dir" && ls -1 | grep -v '^current$' | fuzzel --dmenu --prompt "󰸉  " --lines 8 --width 40) || exit 0
+[ -n "$pick" ] || exit 0
+ln -sfn "$pick" "$dir/current"
+pkill -x swaybg; setsid -f swaybg -i "$dir/current" -m fill >/dev/null 2>&1
