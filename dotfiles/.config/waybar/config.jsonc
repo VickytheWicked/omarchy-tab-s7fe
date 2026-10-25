@@ -4,7 +4,7 @@
   "layer": "top",
   "position": "top",
   "spacing": 0,
-  "height": 30,
+  "height": 36,
   "modules-left": ["custom/omarchy", "hyprland/workspaces", "custom/close"],
   "modules-center": ["clock"],
   "modules-right": [
@@ -110,8 +110,8 @@
   },
   "custom/close": {
     "format": "󰅖",
-    "on-click": "hyprctl dispatch killactive",
-    "tooltip-format": "Close window\n\nSuper + W"
+    "on-click": "tablet-menu-close || hyprctl dispatch killactive",
+    "tooltip-format": "Close menu or window\n\nSuper + W"
   },
   "custom/osk": {
     "format": "󰌌",

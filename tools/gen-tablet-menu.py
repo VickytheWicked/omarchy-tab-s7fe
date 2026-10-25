@@ -160,8 +160,20 @@ run() {
   setsid -f bash -c "$1" >/dev/null 2>&1
 }
 
+# Toggle like Omarchy: invoking the menu while it is open closes it (any level).
+pidfile=${XDG_RUNTIME_DIR:-/tmp}/tablet-menu.pid
+if [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+  kill "$(cat "$pidfile")" 2>/dev/null
+  pkill -x fuzzel
+  rm -f "$pidfile"
+  exit 0
+fi
+pkill -x fuzzel
+echo $$ > "$pidfile"
+trap 'rm -f "$pidfile"' EXIT
+
+back_icon=$'\U000f004d'
 route=${1:-}
-pkill -x fuzzel && [[ -z ${1:-} ]] && exit 0
 
 while true; do
   if [[ -n $route && -n ${ACTION[$route]:-} ]]; then
@@ -170,9 +182,13 @@ while true; do
   fi
   mapfile -t ids < <(children "$route")
   [[ ${#ids[@]} -eq 0 ]] && exit 1
-  idx=$(for id in "${ids[@]}"; do printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}"; done |
-    fuzzel --dmenu --index --prompt "$(title_of "$route")  " --lines "${#ids[@]}" --width 42)
-  if [[ -z $idx ]]; then
+  # Submenus get a Back row on top: touch has no Escape key.
+  [[ -n $route ]] && ids=(__back__ "${ids[@]}")
+  idx=$(for id in "${ids[@]}"; do
+          if [[ $id == __back__ ]]; then printf '%s  Back\n' "$back_icon"
+          else printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}"; fi
+        done | fuzzel --dmenu --index --prompt "$(title_of "$route")  " --lines "${#ids[@]}" --width 42)
+  if [[ -z $idx || ${ids[$idx]} == __back__ ]]; then
     [[ -z $route ]] && exit 0
     [[ $route == *.* ]] && route=${route%.*} || route=""
     continue

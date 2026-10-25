@@ -1,0 +1,9 @@
+#!/bin/sh
+# Bar close button: close the Omarchy menu or launcher if open, else say so (exit 1).
+pidfile=${XDG_RUNTIME_DIR:-/tmp}/tablet-menu.pid
+closed=1
+if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+  kill "$(cat "$pidfile")" 2>/dev/null; rm -f "$pidfile"; closed=0
+fi
+pkill -x fuzzel && closed=0
+exit $closed
