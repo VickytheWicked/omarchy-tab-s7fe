@@ -6,13 +6,17 @@
 # Hyprland (input disable does not touch the driver) while the screen is dark.
 touch_dev=focaltech-ft8203-touchscreen
 state=${XDG_RUNTIME_DIR:-/tmp}/tablet-display-off
-if [ ! -e "$state" ]; then
+# hypridle also sets the backlight to 0 (and shares brightnessctl's saved
+# value), so a dark backlight always means "turn on", flag or not, and a saved
+# value of 0 is never restored.
+if [ ! -e "$state" ] && [ "$(brightnessctl -c backlight get)" -gt 0 ]; then
   brightnessctl -c backlight -q -s
   hyprctl keyword "device[$touch_dev]:enabled" false >/dev/null
   brightnessctl -c backlight -q set 0
   touch "$state"
 else
   brightnessctl -c backlight -q -r
+  [ "$(brightnessctl -c backlight get)" -gt 0 ] || brightnessctl -c backlight -q set 50%
   hyprctl keyword "device[$touch_dev]:enabled" true >/dev/null
   rm -f "$state"
 fi
