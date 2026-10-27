@@ -63,7 +63,7 @@ MENU = [
     ("trigger.toggle.idle-lock", "trigger.toggle.idle-lock", None, None, "tablet-toggle idle"),
     ("trigger.toggle.notifications", "trigger.toggle.notifications", None, None, "tablet-toggle notifications"),
     ("trigger.toggle.nightlight", "trigger.toggle.nightlight", None, None, "tablet-nightlight-toggle"),
-    ("trigger.toggle.top-bar", "trigger.toggle.top-bar", None, None, "pkill -SIGUSR1 waybar"),
+    # No "Menu Bar" toggle: hiding the bar strands a touch-only user (the menu opens from it)
     ("trigger.toggle.window-gaps", "trigger.toggle.window-gaps", None, None, "tablet-toggle gaps"),
     ("trigger.hardware", "trigger.hardware", None, None, None),
     ("trigger.hardware.usb-host", "trigger.hardware.touchscreen", "USB: host mode (keyboard/mouse)", None, "tablet-usb-mode host"),
@@ -115,7 +115,7 @@ MENU = [
     ("update", "update", None, None, None),
     ("update.system", "update.firmware", "System", None, term("tablet-update")),
     ("update.process", "update.process", None, None, None),
-    ("update.process.bar", "update.process.shell", "Bar", None, "pkill -x waybar; setsid -f waybar >/dev/null 2>&1"),
+    ("update.process.bar", "update.process.shell", "Bar", None, "pkill -x waybar"),  # tablet-waybar restarts it
     ("update.process.hyprsunset", "update.process.hyprsunset", None, None, "tablet-toggle restart-nightlight"),
     ("update.hardware", "update.hardware", None, None, None),
     ("update.hardware.audio", "update.hardware.audio", None, None, "pkill -x wireplumber; pkill -x pipewire-pulse; pkill -x pipewire; setsid -f /usr/libexec/pipewire-launcher"),

@@ -156,6 +156,7 @@ SSH: `ssh user@samsung-gts7xllite.local` (avahi) or `ssh user@172.16.42.1` over 
 - **Charging is basic**: up to about 9 W (5 V, 1.8 A) — no fast charging, the SM5440 direct charger and USB-PD negotiation are not driven. A laptop USB port gives less; with the screen on the battery may only hold or charge slowly. With a cable plugged in, *power off* powers straight back on into Linux, so unplug first.
 - **Power button** only turns the backlight off (and blocks touch); the tablet keeps running. DPMS is avoided on purpose: switching the panel off makes the FT8203 touch driver pulse the reset line it shares with the panel, and with the panel driver's `keep_powered` the display is not re-initialised, so it can stay black.
 - **During the first minute after boot**, brightness changes can still glitch the picture: the display fix (patch 0011) only switches on 60 s after boot, because enabling it from the start froze the tablet.
+- **Touch can get stuck** (Hyprland keeps waiting for a finger that already lifted; the kernel still sees every tap). **Press Power twice** (screen off, on): that switches the touchscreen off and on in Hyprland and clears it. The bar restarts itself if it ever exits.
 - Only the **FocalTech FT8203** panel variant works.
 - Suspend is untested; the lock screen cannot be used with the on-screen keyboard, so idle only turns the backlight off.
 - `hyprland-guiutils` and Omarchy's walker/omarchy-shell are not packaged for Alpine; the menu uses fuzzel, the bar uses Waybar.

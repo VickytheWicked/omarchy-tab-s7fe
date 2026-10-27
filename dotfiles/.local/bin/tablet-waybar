@@ -1,0 +1,10 @@
+#!/bin/sh
+# Keep Waybar running: on a touch-only tablet the bar is the way into every
+# menu, so if it exits or crashes it comes straight back.
+pidfile=${XDG_RUNTIME_DIR:-$HOME/.cache}/tablet-waybar.pid
+if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then exit 0; fi
+echo $$ > "$pidfile"
+while true; do
+  waybar >/dev/null 2>&1
+  sleep 1
+done
