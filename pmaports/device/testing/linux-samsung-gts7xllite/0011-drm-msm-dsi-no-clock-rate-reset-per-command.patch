@@ -1,0 +1,73 @@
+From 66f492c284c829240637cefe85efe5b94740f92b Mon Sep 17 00:00:00 2001
+From: VickytheWicked <rupeshvansh84@gmail.com>
+Date: Tue, 27 Oct 2026 21:37:19 +0530
+Subject: [PATCH] drm/msm/dsi: option to not re-set link clock rates before
+ each command
+
+msm_dsi_host_xfer_prepare() calls link_clk_set_rate() before every DSI
+command, even while the link is up and streaming video. The requested
+byte clock is rounded by the DSI PLL (gts7xllite: 84259552 Hz actual,
+VCO 1348152832 Hz), so the clock core does not treat the request as a
+no-op and reprograms the PLL under the running stream.
+
+On the gts7xllite FT8203 panel (video mode, DSC, 4 lanes) this starved
+the lanes on about a third of commands: FIFO_STATUS 0x88881010 (HS FIFO
+underflow on all four data lanes), TIMEOUT_STATUS 0x1 (HS TX timeout),
+logged as dsi_err_worker status=5, with corrupted frames (white grain)
+until the next redraw; a quick run of backlight changes could wedge the
+SoC. Measured over 20 backlight changes each: 6/20 errors (LP) and 8/20
+(HS) with the set_rate, 0/20 and 0/20 without, 0/31 in a burst at 0.5 s
+intervals, and 0/20 again on the final kernel.
+
+Add msm.xfer_skip_clk_rate (default off) to skip the set_rate while the
+link is powered. It is off at boot because skipping it from the start
+froze the tablet right after the desktop came up (not yet understood);
+userspace turns it on once the session runs (/etc/local.d on the
+tablet). The clocks are still enabled per command, which keeps the
+reference counting as it was.
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 283adc042..19065fae3 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -2163,6 +2163,15 @@ void msm_dsi_host_unregister(struct mipi_dsi_host *host)
+ 	}
+ }
+ 
++/*
++ * Off at boot: with it on from the start the gts7xllite froze right after
++ * the desktop came up. Turned on once the session runs (tested: 0 errors in
++ * 71 backlight changes).
++ */
++static bool xfer_skip_clk_rate;
++module_param(xfer_skip_clk_rate, bool, 0644);
++MODULE_PARM_DESC(xfer_skip_clk_rate, "do not re-set link clock rates before each command while the link is up");
++
+ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 				const struct mipi_dsi_msg *msg)
+ {
+@@ -2180,7 +2189,17 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
+ 	 * mdp clock need to be enabled to receive dsi interrupt
+ 	 */
+ 	pm_runtime_get_sync(&msm_host->pdev->dev);
+-	cfg_hnd->ops->link_clk_set_rate(msm_host);
++	/*
++	 * While the link is up its clocks already run at these rates. Setting
++	 * them again is not a no-op: the requested byte clock is rounded by the
++	 * PLL, so the clock core sees a "new" rate and reprograms the DSI PLL
++	 * under the running video stream. On the gts7xllite FT8203 panel that
++	 * starved all four lanes on about a third of commands (HS FIFO
++	 * underflow + HS TX timeout, dsi_err_worker status=5, corrupted frames)
++	 * and could wedge the SoC on a quick run of brightness changes.
++	 */
++	if (!(xfer_skip_clk_rate && msm_host->power_on))
++		cfg_hnd->ops->link_clk_set_rate(msm_host);
+ 	cfg_hnd->ops->link_clk_enable(msm_host);
+ 
+ 	/* TODO: vote for bus bandwidth */
+-- 
+2.56.0
+

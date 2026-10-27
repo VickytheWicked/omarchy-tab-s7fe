@@ -1,0 +1,10 @@
+#!/bin/sh
+# Kernel r6 (patch 0011): stop the DSI driver re-setting its link clocks before
+# every display command, which corrupted frames on brightness changes (white
+# grain, dsi_err_worker status=5) and could freeze the tablet. The switch is
+# off at boot because turning it on from the start froze the tablet right
+# after the desktop came up; once the session runs it is safe (0 errors in 71
+# brightness changes). Runs in the background so boot does not wait.
+p=/sys/module/msm/parameters/xfer_skip_clk_rate
+[ -w "$p" ] || exit 0
+( sleep 60; echo 1 > "$p" ) >/dev/null 2>&1 &

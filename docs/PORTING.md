@@ -129,7 +129,13 @@ After the screen was switched off and on, it sometimes stayed black with the bac
 
 Every brightness change briefly garbled the picture with white grain, logged as `dsi_err_worker: status=5` (DSI timeout + FIFO error). Several in a row could freeze the tablet.
 
-Brightness is a command sent to the panel over the same **DSI link** that streams the pixels. The display driver waits for the end of a frame and then **sleeps another 2–4 ms** before sending a command, which assumes a long gap between frames. This panel's gap (vertical blanking) is 37 lines, about **0.24 ms**. So every brightness command landed in the middle of the next frame, as a slow low-power transfer, and collided with the pixel stream. The r6 kernel sends the command right at the end of the frame when the blanking is that short.
+Brightness is a command sent to the panel over the same **DSI link** that streams the pixels. The first theory was timing: the driver sleeps 2–4 ms after a frame ends before sending a command, while this panel's gap between frames is only 0.24 ms. Fixing that (patch 0010) didn't remove the errors: still about one brightness change in three. Trying low-power vs high-speed commands and adding delays didn't change the rate either, so the next step was logging the DSI controller's status registers on each error. Every one read the same: **HS FIFO underflow on all four data lanes** plus an HS transmit timeout. The pixel stream itself was starving.
+
+The cause: before **every** command, the driver re-applies the link clock rates. The rate it asks for (byte clock) isn't exactly what the DSI PLL can produce (84,259,552 Hz actual), so the clock framework treats it as a change and **reprograms the PLL while video is running**. Patch 0011 stops that while the link is up. Measured: 6–8 errors per 20 brightness changes before, **0 in 71** after, including a fast burst that used to freeze the tablet.
+
+One catch: with the fix active from the very first moment, the tablet froze right after the desktop appeared. It needed a Download-mode reflash to recover, and the cause isn't understood yet. So the fix is a kernel switch (`msm.xfer_skip_clk_rate`) that's off at boot, and `/etc/local.d/dsi-clk-fix.start` turns it on 60 seconds later, once the desktop is running.
+
+Lesson from the same evening: a rebuilt kernel needs its **own** modules. This kernel rejects modules whose type information (BTF) doesn't match it, so a new kernel image with old modules boots without touch, battery, Wi-Fi or firewall.
 
 ### Charging that flip-flopped (kernel r6)
 
@@ -153,7 +159,7 @@ With hardware working, the console system became an Omarchy look-alike:
 Later kernel updates don't need Download mode at all:
 
 1. Build the kernel on the PC (`make ARCH=arm64 LLVM=1` with the package's config and patches).
-2. Copy the kernel, modules and device tree over SSH.
+2. Copy the kernel, **its own** modules (`make modules_install`, from the same build; older modules are rejected) and the device tree over SSH.
 3. On the tablet, rebuild `boot.img` and write it to RECOVERY, keeping the previous image as a fallback.
 4. Reboot. If the new kernel doesn't boot, Download mode + heimdall can always put the previous `boot.img` back.
 

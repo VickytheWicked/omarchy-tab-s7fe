@@ -1,0 +1,56 @@
+From b8203e92a46023f9b1050fbc662b6bb8d0d808f6 Mon Sep 17 00:00:00 2001
+From: VickytheWicked <rupeshvansh84@gmail.com>
+Date: Tue, 27 Oct 2026 20:23:01 +0530
+Subject: [PATCH 10/11] drm/msm/dsi: skip the 2-4 ms post-video-done delay on
+ short-blanking panels
+
+dsi_wait4video_eng_busy() waits for video done and then sleeps 2-4 ms
+before triggering the command DMA. On the gts7xllite FT8203 panel the
+vertical blanking is 37 lines (~0.24 ms), so the delay always ends inside
+the next frame; with DSI_TRIG_CTRL.BLOCK_DMA_WITHIN_FRAME the hardware
+then holds the command until the following blanking anyway, so the sleep
+only adds latency. Keep it only when blanking is longer than 4 ms.
+
+This alone did not remove the dsi_err_worker status=5 errors seen on
+backlight changes (still ~30% of commands); the cause of those is fixed in
+the next patch.
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 21 +++++++++++++++++++--
+ 1 file changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index 2d4a9ee68..283adc042 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -1220,9 +1220,26 @@ static void dsi_wait4video_eng_busy(struct msm_dsi_host *msm_host)
+ 		return;
+ 
+ 	if (msm_host->power_on && msm_host->enabled) {
++		const struct drm_display_mode *mode = msm_host->mode;
++		u64 vblank_us = 0;
++
+ 		dsi_wait4video_done(msm_host);
+-		/* delay 4 ms to skip BLLP */
+-		usleep_range(2000, 4000);
++
++		if (mode && mode->clock)
++			vblank_us = div_u64((u64)(mode->vtotal - mode->vdisplay) *
++					    mode->htotal * 1000, mode->clock);
++		/*
++		 * Video done marks the start of vertical blanking. The 2-4 ms
++		 * delay below only stays inside it on panels with a long
++		 * blanking period; on short ones (gts7xllite FT8203: 37 lines,
++		 * ~0.24 ms) it puts the command in the middle of the next
++		 * frame, where an LP command collides with the pixel stream
++		 * (dsi_err_worker status=5, corrupted frames). Send right away
++		 * there.
++		 */
++		if (vblank_us > 4000)
++			/* delay 4 ms to skip BLLP */
++			usleep_range(2000, 4000);
+ 	}
+ }
+ 
+-- 
+2.56.0
+

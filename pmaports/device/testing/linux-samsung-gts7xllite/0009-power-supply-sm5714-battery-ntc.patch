@@ -1,0 +1,135 @@
+From 1d30bb947ef1b8acca68786f2aac15c8aa3bfc96 Mon Sep 17 00:00:00 2001
+From: VickytheWicked <rupeshvansh84@gmail.com>
+Date: Tue, 27 Oct 2026 20:22:26 +0530
+Subject: [PATCH 09/10] power: supply: sm5714: use the battery NTC for charge
+ temperature limits
+
+The gauge's temperature register sits in the SM5714 package next to the
+charger: going from 1 A to 1.7 A charge raises it ~2.7 C within six seconds
+and it falls back as fast. With the 41 C warm limit the driver flipped
+between 2.1 A and 1 A every 10 s (669 switches in one boot), chasing the
+charger's own heat. Stock reads the battery NTC on PM6150L ADC GPIO2
+(sec-battery adc-temp, ADC5 channel 0x53); describe that channel in the DT
+and use it for the limits and POWER_SUPPLY_PROP_TEMP, falling back to the
+gauge when it is absent or reads implausibly.
+---
+ .../dts/qcom/sm7225-samsung-gts7xllite.dts    | 13 +++++++
+ drivers/power/supply/sm5714_fuelgauge.c       | 38 ++++++++++++++++---
+ 2 files changed, 46 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+index b0fc7efd6..29212f55f 100644
+--- a/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
++++ b/arch/arm64/boot/dts/qcom/sm7225-samsung-gts7xllite.dts
+@@ -172,6 +172,9 @@
+ 	fuel-gauge@71 {
+ 		compatible = "siliconmitus,sm5714-fuelgauge";
+ 		reg = <0x71>;
++		/* battery NTC, as in the stock DT (sec-battery "adc-temp") */
++		io-channels = <&pm6150l_adc ADC5_GPIO2_100K_PU>;
++		io-channel-names = "batt-therm";
+ 	};
+ };
+ 
+@@ -563,6 +566,16 @@
+ 	firmware-name = "qcom/sm7225/Samsung/gts7xllite/a615_zap.mbn";
+ };
+ 
++&pm6150l_adc {
++	channel@53 {
++		reg = <ADC5_GPIO2_100K_PU>;
++		qcom,ratiometric;
++		qcom,hw-settle-time = <200>;
++		qcom,pre-scaling = <1 1>;
++		label = "batt_therm";
++	};
++};
++
+ &pm6350_gpios {
+ 	gpio_keys_pin: gpio-keys-state {
+ 		pins = "gpio2";
+diff --git a/drivers/power/supply/sm5714_fuelgauge.c b/drivers/power/supply/sm5714_fuelgauge.c
+index 4e4106bdc..e8d610a2d 100644
+--- a/drivers/power/supply/sm5714_fuelgauge.c
++++ b/drivers/power/supply/sm5714_fuelgauge.c
+@@ -11,6 +11,7 @@
+ 
+ #include <linux/bits.h>
+ #include <linux/i2c.h>
++#include <linux/iio/consumer.h>
+ #include <linux/math.h>
+ #include <linux/mod_devicetable.h>
+ #include <linux/module.h>
+@@ -82,6 +83,7 @@ enum sm5714_temp_zone {
+ struct sm5714_fg {
+ 	struct i2c_client *client;
+ 	struct i2c_client *chg;
++	struct iio_channel *batt_therm;
+ 	struct power_supply *psy;
+ 	struct delayed_work chg_work;
+ 	enum sm5714_temp_zone zone;
+@@ -176,10 +178,31 @@ static int sm5714_fg_charge_status(struct sm5714_fg *fg)
+ 	return POWER_SUPPLY_STATUS_NOT_CHARGING;
+ }
+ 
++/*
++ * Battery temperature in 0.1 C. The gauge's own reading sits in the SM5714
++ * package next to the charger and climbs ~2.7 C within seconds when charging
++ * goes from 1 A to 1.7 A, so the charge limits would chase their own heat.
++ * Stock reads the battery NTC on the PM6150L ADC instead; use it when the DT
++ * provides it.
++ */
+ static int sm5714_fg_temp(struct sm5714_fg *fg, int *temp)
+ {
+-	int ret = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_TEMPERATURE);
++	int ret;
+ 
++	if (fg->batt_therm) {
++		ret = iio_read_channel_processed(fg->batt_therm, temp);
++		if (ret < 0)
++			return ret;
++		*temp /= 100;	/* millidegrees -> 0.1 C */
++		/* an open or shorted NTC reads far outside this; use the gauge then */
++		if (*temp > -300 && *temp < 900)
++			return 0;
++		dev_warn_once(&fg->client->dev,
++			      "battery NTC reads %d.%d C, using the gauge\n",
++			      *temp / 10, abs(*temp % 10));
++	}
++
++	ret = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_TEMPERATURE);
+ 	if (ret < 0)
+ 		return ret;
+ 	*temp = (((ret & 0x7fff) * 10) * 2989) >> 11 >> 8;
+@@ -324,12 +347,9 @@ static int sm5714_fg_get_property(struct power_supply *psy,
+ 		break;
+ 
+ 	case POWER_SUPPLY_PROP_TEMP:
+-		ret = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_TEMPERATURE);
++		ret = sm5714_fg_temp(fg, &val->intval);
+ 		if (ret < 0)
+ 			return ret;
+-		val->intval = (((ret & 0x7fff) * 10) * 2989) >> 11 >> 8;
+-		if (ret & 0x8000)
+-			val->intval = -val->intval;
+ 		break;
+ 
+ 	case POWER_SUPPLY_PROP_STATUS:
+@@ -395,6 +415,14 @@ static int sm5714_fg_probe(struct i2c_client *client)
+ 	cfg.drv_data = fg;
+ 	cfg.fwnode = dev_fwnode(dev);
+ 
++	fg->batt_therm = devm_iio_channel_get(dev, "batt-therm");
++	if (IS_ERR(fg->batt_therm)) {
++		if (PTR_ERR(fg->batt_therm) != -ENODEV)
++			return dev_err_probe(dev, PTR_ERR(fg->batt_therm),
++					     "failed to get battery thermistor\n");
++		fg->batt_therm = NULL;
++	}
++
+ 	fg->chg = devm_i2c_new_dummy_device(dev, client->adapter, SM5714_CHG_ADDR);
+ 	if (IS_ERR(fg->chg))
+ 		return dev_err_probe(dev, PTR_ERR(fg->chg),
+-- 
+2.56.0
+

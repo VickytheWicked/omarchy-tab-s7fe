@@ -42,7 +42,7 @@ ssh -t "$target" "set -e
   sudo visudo -cf /etc/sudoers.d/80-tablet-actions
   for g in video audio input; do sudo addgroup \$(id -un) \$g || true; done
   sudo sed -i -E 's/^#FastConnectable = false/FastConnectable = true/; s/^#ReconnectAttempts=7/ReconnectAttempts=7/; s/^#ReconnectIntervals=1,2,4,8,16,32,64/ReconnectIntervals=1,2,4,8,16,32,64/; s/^#AutoEnable=true/AutoEnable=true/' /etc/bluetooth/main.conf
-  for s in elogind tinydm bluetooth avahi-daemon; do sudo rc-update add \$s default; done
+  for s in elogind tinydm bluetooth avahi-daemon local; do sudo rc-update add \$s default; done
   sudo tinydm-set-session -f -s /usr/share/wayland-sessions/hyprland-dbus.desktop
   # key-only SSH, but only once a key is installed (ssh-copy-id), or you would be locked out
   if [ -s ~/.ssh/authorized_keys ]; then

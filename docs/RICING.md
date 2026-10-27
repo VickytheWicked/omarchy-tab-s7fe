@@ -114,7 +114,7 @@ These settings look odd but keep the tablet working. Change the look around them
 | `monitor = DSI-1, …, transform, 3` and `touchdevice { transform = 3 }` | Panel is portrait; both must match or touches land in the wrong place |
 | `cursor { no_hardware_cursors = true }` | The hardware cursor plane is misplaced on the rotated panel |
 | No `dpms` anywhere (idle, power button) | Switching the panel off can leave it black until a reboot; only the backlight goes off |
-| No brightness animations, brightness keys without repeat | Each brightness change is a command on the display link; bursts of them glitch the picture or freeze the tablet (fixed in kernel r6, still best avoided) |
+| No brightness animations, brightness keys without repeat | Each brightness change is a command on the display link; bursts of them used to glitch the picture or freeze the tablet; kernel r6 fixes it 60 s after boot, but animating brightness is still pointless load |
 | hypridle timeout 15 min | Same reason: fewer brightness changes |
 
 ## Sharing your rice
