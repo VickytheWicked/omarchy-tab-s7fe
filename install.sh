@@ -14,7 +14,8 @@ packages=(
   tinydm tinydm-openrc xdg-desktop-portal-gtk avahi
   # desktop
   hyprland xdg-desktop-portal-hyprland hyprlock hypridle hyprsunset hyprpicker
-  waybar fuzzel mako swaybg alacritty foot font-jetbrains-mono-nerd wvkbd
+  waybar fuzzel mako swaybg alacritty foot font-jetbrains-mono-nerd squeekboard
+  network-manager-applet blueman
   mesa-dri-gallium mesa-vulkan-freedreno brightnessctl wl-clipboard grim slurp
   # tools
   btop bluetui wiremix fastfetch fzf bash linux-firmware-qca

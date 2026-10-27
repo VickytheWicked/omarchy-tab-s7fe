@@ -1,7 +1,13 @@
 #!/bin/sh
-# Show/hide the wvkbd on-screen keyboard (SIGRTMIN toggles it), start it if needed.
-if pgrep -x wvkbd-mobintl >/dev/null; then
-  pkill -RTMIN -x wvkbd-mobintl
+# Show/hide squeekboard (bar keyboard button, Super+Ctrl+K). It also pops up by
+# itself in text fields; this is for apps that don't ask for it. Starts it if needed.
+osk() { verb=$1; shift; busctl --user "$verb" sm.puri.OSK0 /sm/puri/OSK0 sm.puri.OSK0 "$@" 2>/dev/null; }
+if ! pgrep -x squeekboard >/dev/null; then
+  setsid -f squeekboard >/dev/null 2>&1
+  sleep 1
+  osk call SetVisible b true
+elif [ "$(osk get-property Visible)" = "b true" ]; then
+  osk call SetVisible b false
 else
-  setsid wvkbd-mobintl -L 300 >/dev/null 2>&1 &
+  osk call SetVisible b true
 fi

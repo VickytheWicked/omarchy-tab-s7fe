@@ -3,7 +3,7 @@
 /usr/share/omarchy/default/omarchy/omarchy-menu.jsonc.
 
 Icons and labels come from Omarchy's file; actions are the tablet's own
-(Alpine apk, fuzzel, nmtui, bluetui, ...). Entries that make no sense on the
+(Alpine apk, fuzzel, nm-connection-editor, blueman, ...). Entries that make no sense on the
 tablet (AUR, Plymouth, drive encryption, ...) are simply not listed here.
 """
 import re
@@ -73,8 +73,8 @@ MENU = [
     ("style.background", "style.background", None, None, "tablet-background"),
     ("style.hyprland", "style.hyprland", None, None, EDIT_HYPR),
     ("setup", "setup", None, None, None),
-    ("setup.wifi", "update.hardware.wifi", None, None, "alacritty -e nmtui"),
-    ("setup.bluetooth", "update.hardware.bluetooth", None, None, "alacritty -e bluetui"),
+    ("setup.wifi", "update.hardware.wifi", None, None, "nm-connection-editor"),
+    ("setup.bluetooth", "update.hardware.bluetooth", None, None, "blueman-manager"),
     ("setup.audio", "update.hardware.audio", None, None, "alacritty -e wiremix"),
     ("setup.monitors", "setup.monitors", None, None, EDIT_HYPR),
     ("setup.keybindings", "setup.keybindings", None, None, EDIT_HYPR),
@@ -161,7 +161,7 @@ run() {
 }
 
 # Toggle like Omarchy: invoking the menu while it is open closes it (any level).
-pidfile=${XDG_RUNTIME_DIR:-/tmp}/tablet-menu.pid
+pidfile=${XDG_RUNTIME_DIR:-$HOME/.cache}/tablet-menu.pid
 if [[ -f $pidfile ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
   kill "$(cat "$pidfile")" 2>/dev/null
   pkill -x fuzzel
@@ -193,6 +193,9 @@ while true; do
             *) printf '%s  %s\n' "${ICON[$id]}" "${LABEL[$id]}" ;;
           esac
         done | fuzzel --dmenu --index --prompt "$(title_of "$route")  " --lines "${#ids[@]}" --width 42)
+  # fuzzel prints -1 (or the typed text) when Enter matches nothing: never let
+  # that index into ids[] (ids[-1] in the System menu is Shutdown)
+  [[ -z $idx || ( $idx =~ ^[0-9]+$ && $idx -lt ${#ids[@]} ) ]] || exit 0
   [[ -n $idx && ${ids[$idx]} == __close__ ]] && exit 0
   if [[ -z $idx || ${ids[$idx]} == __back__ ]]; then
     [[ -z $route ]] && exit 0

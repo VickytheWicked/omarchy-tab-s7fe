@@ -36,8 +36,8 @@ add style.theme '󰸌' 'Theme (Tokyo Night)' 'notify-send '"'"'Theme'"'"' '"'"'T
 add style.background '' Background tablet-background
 add style.hyprland '' Hyprland 'codium ~/.config/hypr/hyprland.conf'
 add setup '' Setup ''
-add setup.wifi '󱚾' Wi-Fi 'alacritty -e nmtui'
-add setup.bluetooth '󰂯' Bluetooth 'alacritty -e bluetui'
+add setup.wifi '󱚾' Wi-Fi nm-connection-editor
+add setup.bluetooth '󰂯' Bluetooth blueman-manager
 add setup.audio '' Audio 'alacritty -e wiremix'
 add setup.monitors '󰍹' Monitors 'codium ~/.config/hypr/hyprland.conf'
 add setup.keybindings '' Keybindings 'codium ~/.config/hypr/hyprland.conf'

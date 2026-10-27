@@ -1,16 +1,15 @@
-// Classic Omarchy Waybar layout, plus touch buttons for the tablet.
+// Classic Omarchy Waybar layout, plus touch buttons for the tablet. Wi-Fi and
+// Bluetooth are the nm-applet and blueman tray icons: tap for networks/devices.
 {
   "reload_style_on_change": true,
   "layer": "top",
   "position": "top",
   "spacing": 0,
-  "height": 36,
+  "height": 44,
   "modules-left": ["custom/omarchy", "hyprland/workspaces", "custom/close"],
   "modules-center": ["clock"],
   "modules-right": [
     "tray",
-    "bluetooth",
-    "network",
     "pulseaudio",
     "cpu",
     "battery",
@@ -57,25 +56,6 @@
     "format-alt": "{:L%d %B W%V %Y}",
     "tooltip": false
   },
-  "network": {
-    "format-icons": ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"],
-    "format": "{icon}",
-    "format-wifi": "{icon}",
-    "format-ethernet": "󰀂",
-    "format-disconnected": "󰤮",
-    "tooltip-format-wifi": "{essid} ({frequency} GHz)\n⇣{bandwidthDownBytes}  ⇡{bandwidthUpBytes}",
-    "tooltip-format-disconnected": "Disconnected",
-    "interval": 3,
-    "spacing": 1,
-    "on-click": "alacritty -e nmtui"
-  },
-  "bluetooth": {
-    "format": "󰂯",
-    "format-disabled": "󰂲",
-    "format-connected": "󰂱",
-    "tooltip-format": "Devices connected: {num_connections}",
-    "on-click": "alacritty -e bluetui"
-  },
   "pulseaudio": {
     "format": "{icon}",
     "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
@@ -105,8 +85,8 @@
     }
   },
   "tray": {
-    "icon-size": 12,
-    "spacing": 12
+    "icon-size": 22,
+    "spacing": 16
   },
   "custom/close": {
     "format": "󰅖",
