@@ -12,7 +12,7 @@
 
 - **Mainline kernel, not Android's** — display, touch, GPU (Adreno 619), Wi-Fi, Bluetooth, battery and charging all running on Linux 7.2.
 - **8 kernel patches** on top of the community port: SM5714 charger control written for this port, the community touchscreen driver wired up, and fixes for display corruption, power-off and battery reporting.
-- **Omarchy, ported to Alpine + touch** — the menu is generated from Omarchy's own definition file; Close/Back rows, a touch-friendly bar and an on-screen keyboard make it usable without a keyboard.
+- **Omarchy, ported to Alpine + touch** — the menu is generated from Omarchy's own definition file; Close/Back rows, 44 px touch targets, tap-to-use Wi-Fi and Bluetooth, and an on-screen keyboard that pops up in text fields make it usable without a keyboard.
 - **A real dev box** — VSCodium with Python, Chromium, and Claude Code running natively on the tablet.
 
 > ⚠️ **Unlocking the bootloader wipes the tablet and trips Samsung Knox permanently** (Secure Folder, Samsung Pass/Wallet/Health stop working for good). Charging is basic (no fast charging). Read [Known limitations](#known-limitations) before you start.
@@ -20,6 +20,8 @@
 | Omarchy menu | Apps (touch) | Install submenu |
 |---|---|---|
 | ![Omarchy menu](docs/screenshots/menu.jpg) | ![App launcher with Close row](docs/screenshots/apps.jpg) | ![Install submenu with Back row](docs/screenshots/menu-install.jpg) |
+
+**Guides:** [How the tablet was converted to Linux](docs/PORTING.md) · [Ricing it](docs/RICING.md)
 
 ## What works
 
@@ -60,6 +62,8 @@ pmaports/device/testing/
 dotfiles/                       Hyprland, Waybar, fuzzel, Alacritty, mako, VSCodium... + tablet-* scripts
 system/                         Hyprland tinydm session, power-key, Chromium and SSH firewall settings
 tools/gen-tablet-menu.py        generates tablet-menu from Omarchy's omarchy-menu.jsonc
+tools/omarchy-theme.sh          re-colours the tablet with any Omarchy theme (docs/RICING.md)
+docs/                           PORTING.md (the full story), RICING.md (customising the look)
 install.sh                      sets up the desktop on a freshly flashed tablet over SSH
 ```
 
@@ -126,7 +130,7 @@ The desktop starts at boot (tinydm autologin into Hyprland).
 | Super + W | Close window (also: ✕ in the bar) |
 | Super + 1…0 | Workspaces (+ Shift: move window) |
 | Super + Ctrl + C / O / H | Capture / Toggle / Hardware menus |
-| Super + Ctrl + B | Bluetooth (bluetui) |
+| Super + Ctrl + B | Bluetooth (blueman) |
 | Super + Ctrl + U | USB host ↔ device |
 | Super + Ctrl + K | On-screen keyboard (also: keyboard icon in the bar) |
 | Print / Super + Print | Screenshot / colour picker |
