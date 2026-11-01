@@ -56,7 +56,7 @@ The tablet is **Alpine Linux** (postmarketOS edge), not Arch like Omarchy:
 | `pacman -Syu` | `tablet-update` (also rewrites RECOVERY if the kernel changed) |
 | `systemctl restart x` | `sudo rc-service x restart` |
 | `systemctl enable x` | `sudo rc-update add x default` |
-| `journalctl -b` | `sudo dmesg` (kernel) and `/var/log/messages` (services) |
+| `journalctl -b` | `sudo dmesg` (kernel) and `logread` (services, from logbookd) |
 
 The shell is BusyBox `ash`, so some GNU flags don't exist (`ls --time-style`, `grep -P`), and scripts should be plain `sh`. `sudo apk add bash coreutils grep` if you need the GNU versions.
 

@@ -21,7 +21,7 @@
 |---|---|---|
 | ![Omarchy menu](docs/screenshots/menu.jpg) | ![App launcher with Close row](docs/screenshots/apps.jpg) | ![Install submenu with Back row](docs/screenshots/menu-install.jpg) |
 
-**Guides:** [How the tablet was converted to Linux](docs/PORTING.md) · [Ricing it](docs/RICING.md) · [Changing it yourself](docs/HACKING.md)
+**Guides:** [How the tablet was converted to Linux](docs/PORTING.md) · [Ricing it](docs/RICING.md) · [Changing it yourself](docs/HACKING.md) · [Storage and filesystem](docs/FILESYSTEM.md) · [Wi-Fi and Bluetooth](docs/WIFI-BLUETOOTH.md)
 
 ## What works
 
