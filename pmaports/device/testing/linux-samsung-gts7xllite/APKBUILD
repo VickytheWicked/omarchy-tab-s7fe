@@ -9,7 +9,7 @@ maintainer="Vansh <rupeshvansh84@gmail.com>"
 _flavor="samsung-gts7xllite"
 pkgname=linux-$_flavor
 pkgver=7.2.0
-pkgrel=6
+pkgrel=7
 pkgdesc="Mainline kernel fork for Samsung Galaxy Tab S7 FE LTE (SM7225)"
 arch="aarch64"
 _carch="arm64"
@@ -54,6 +54,7 @@ source="
 	0009-power-supply-sm5714-battery-ntc.patch
 	0010-drm-msm-dsi-short-vblank-command-delay.patch
 	0011-drm-msm-dsi-no-clock-rate-reset-per-command.patch
+	0012-power-supply-sm5714-charge-supervision.patch
 "
 builddir="$srcdir/linux-$_commit"
 
@@ -100,4 +101,5 @@ cf952aeb1617540feabe673e4d25000dd37f35b461f3b880464675943dc72ce0a870cc5052efd583
 ef8df6b9a8d8c7fbc37c598ddfd4f586e4930f8eac240f3e2817a25e7e966d07523d2fc554fac6ee969dccaf693d06915aa3092e299ac4c6a05243af9d32ed8b  0009-power-supply-sm5714-battery-ntc.patch
 7a0f81e4ff64f4df08a6bbec68538cd0864e370c9e832514d08feec52bac621e74feb86e580d82276229875e2feadc17fcc264a188f9889a193a613f2c561983  0010-drm-msm-dsi-short-vblank-command-delay.patch
 751d4554d0f3755bb7086e9ea2b187d0bcd0069695137ba874a3dd3542d2ae44df6a210ec35ba3cafff853028a4c7c8a0994aa0ec72c1cb13d5df95e03168a3e  0011-drm-msm-dsi-no-clock-rate-reset-per-command.patch
+77ad8029777ebe8029beaf409b741aa8872c08fb07680bf53240fadf4383693ce62957e5b3096e4b8de8b87724b96fdd2f71b5bd05a761dc9b71f7a7cf6e3f42  0012-power-supply-sm5714-charge-supervision.patch
 "

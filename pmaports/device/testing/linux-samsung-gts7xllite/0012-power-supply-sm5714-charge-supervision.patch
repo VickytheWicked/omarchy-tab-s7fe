@@ -1,0 +1,296 @@
+From 423e0cafd777bc794d5baf84fdabb49a6c1547e1 Mon Sep 17 00:00:00 2001
+From: VickytheWicked <rupeshvansh84@gmail.com>
+Date: Thu, 29 Oct 2026 23:45:16 +0530
+Subject: [PATCH] power: supply: sm5714: own charge enable, stop when full,
+ recover stuck charger
+
+The charger was found stuck: VBUS present, charge mode on, but ENQ4FET
+cleared and CHGON off, with the fast-charge safety timer interrupt
+latched. Setting ENQ4FET again did not restart it; only a full power
+cycle did.
+
+Do what the stock driver and battery service do instead of relying on
+the bootloader:
+- set ENQ4FET ourselves, at 500 mA input as stock does
+- switch charging off once the battery is full (top-off or 100%) and
+  back on 100 mV below the float voltage
+- restart the charge loop every 3 hours of continuous charging so the
+  safety timer is never reached
+- if charging is allowed but the charger has not charged for 30 s,
+  log the status and restart it (suspend + ENQ4FET toggle), at most
+  every 10 minutes
+- report health (overheat/cold, safety timer expired)
+---
+ drivers/power/supply/sm5714_fuelgauge.c | 155 +++++++++++++++++++++++-
+ 1 file changed, 151 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/power/supply/sm5714_fuelgauge.c b/drivers/power/supply/sm5714_fuelgauge.c
+index e8d610a2d..f3c993c78 100644
+--- a/drivers/power/supply/sm5714_fuelgauge.c
++++ b/drivers/power/supply/sm5714_fuelgauge.c
+@@ -7,9 +7,15 @@
+  * Charger values follow the stock Samsung DT for gts7xllite: float voltage
+  * 4380 mV, input 1800 mA, charge 2100 mA; above 41 C float 4150 mV and less
+  * current, above 50 C or below 0 C charging is suspended.
++ *
++ * Like stock, charging is switched off once the battery is full and back on
++ * 100 mV below the float voltage, and the charge loop is restarted every few
++ * hours: left charging for too long the chip's safety timer expires, and then
++ * it stops charging until it loses power completely.
+  */
+ 
+ #include <linux/bits.h>
++#include <linux/delay.h>
+ #include <linux/i2c.h>
+ #include <linux/iio/consumer.h>
+ #include <linux/math.h>
+@@ -32,19 +38,25 @@
+ #define SM5714_FG_SRAM_CURRENT_AVG	0x09
+ 
+ #define SM5714_CHG_ADDR			0x49
++#define SM5714_CHG_REG_INT3		0x02
+ #define SM5714_CHG_REG_STATUS1		0x0d
+ #define SM5714_CHG_REG_STATUS2		0x0e
++#define SM5714_CHG_REG_CNTL1		0x13
+ #define SM5714_CHG_REG_CNTL2		0x14
+ #define SM5714_CHG_REG_VBUSCNTL		0x15
+ #define SM5714_CHG_REG_CHGCNTL2		0x18
+ #define SM5714_CHG_REG_CHGCNTL4		0x1a
+ #define SM5714_CHG_REG_WDTCNTL		0x22
+ 
++#define SM5714_CHG_INT3_FASTTMROFF	BIT(5)
++
+ #define SM5714_CHG_STATUS1_VBUSPOK	BIT(0)
+ #define SM5714_CHG_STATUS2_CHGON	BIT(3)
+ #define SM5714_CHG_STATUS2_TOPOFF	BIT(5)
+ #define SM5714_CHG_STATUS2_WDT_EXPIRED	BIT(7)
+ 
++#define SM5714_CHG_CNTL1_ENQ4FET	BIT(3)
++
+ #define SM5714_CHG_MODE_MASK		0x0f
+ #define SM5714_CHG_MODE_SUSPEND		0x0
+ #define SM5714_CHG_MODE_CHG_ON_VBUS	0x5
+@@ -63,6 +75,7 @@
+ #define SM5714_CHG_CURRENT_WARM_MA	1000
+ #define SM5714_CHG_FLOAT_NORMAL_MV	4380
+ #define SM5714_CHG_FLOAT_WARM_MV	4150
++#define SM5714_CHG_RECHARGE_DROP_MV	100
+ 
+ /* Battery temperature thresholds in 0.1 C (stock swelling/high/low limits) */
+ #define SM5714_TEMP_WARM		410
+@@ -73,6 +86,11 @@
+ #define SM5714_TEMP_COLD_RECOVER	20
+ 
+ #define SM5714_CHG_POLL			msecs_to_jiffies(10000)
++/* restart the charge loop well before the chip's safety timer runs out */
++#define SM5714_CHG_CYCLE_TIME		(3 * 3600 * HZ)
++/* polls without charging before the charger is treated as stuck */
++#define SM5714_CHG_STUCK_POLLS		3
++#define SM5714_CHG_RECOVER_INTERVAL	(10 * 60 * HZ)
+ 
+ enum sm5714_temp_zone {
+ 	SM5714_ZONE_NORMAL,
+@@ -87,7 +105,14 @@ struct sm5714_fg {
+ 	struct power_supply *psy;
+ 	struct delayed_work chg_work;
+ 	enum sm5714_temp_zone zone;
++	int temp;
+ 	u8 last_status1, last_status2;
++	bool full;
++	bool timer_expired;
++	bool cycling;
++	unsigned long cycle_start;
++	unsigned long last_recover;
++	unsigned int stuck_polls;
+ };
+ 
+ static int sm5714_fg_read_sram(struct sm5714_fg *fg, u8 addr)
+@@ -168,7 +193,7 @@ static int sm5714_fg_charge_status(struct sm5714_fg *fg)
+ 		return POWER_SUPPLY_STATUS_DISCHARGING;
+ 
+ 	soc = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_SOC);
+-	if ((st2 & SM5714_CHG_STATUS2_TOPOFF) ||
++	if (fg->full || (st2 & SM5714_CHG_STATUS2_TOPOFF) ||
+ 	    (soc >= 0 && ((soc + 0x80) >> 8) >= 100))
+ 		return POWER_SUPPLY_STATUS_FULL;
+ 
+@@ -230,6 +255,107 @@ static enum sm5714_temp_zone sm5714_next_zone(enum sm5714_temp_zone zone, int te
+ 	}
+ }
+ 
++/* ENQ4FET is the charge enable; stock turns it on at 500 mA input and ramps back up */
++static void sm5714_chg_set_enable(struct sm5714_fg *fg, bool enable)
++{
++	int ret;
++
++	if (!enable) {
++		sm5714_chg_update(fg, SM5714_CHG_REG_CNTL1, SM5714_CHG_CNTL1_ENQ4FET, 0);
++		return;
++	}
++
++	ret = sm5714_chg_read(fg, SM5714_CHG_REG_CNTL1);
++	if (ret < 0 || (ret & SM5714_CHG_CNTL1_ENQ4FET))
++		return;
++
++	sm5714_chg_update(fg, SM5714_CHG_REG_VBUSCNTL, 0x7f, SM5714_CHG_INPUT_MA(500));
++	usleep_range(5000, 6000);	/* 250 mA/ms */
++	sm5714_chg_update(fg, SM5714_CHG_REG_CNTL1, SM5714_CHG_CNTL1_ENQ4FET,
++			  SM5714_CHG_CNTL1_ENQ4FET);
++	sm5714_chg_update(fg, SM5714_CHG_REG_VBUSCNTL, 0x7f,
++			  SM5714_CHG_INPUT_MA(SM5714_CHG_INPUT_LIMIT_MA));
++}
++
++/* toggling ENQ4FET restarts the charge loop, as the stock charge-done handler does */
++static void sm5714_chg_restart(struct sm5714_fg *fg, bool suspend)
++{
++	if (suspend) {
++		sm5714_chg_update(fg, SM5714_CHG_REG_CNTL2, SM5714_CHG_MODE_MASK,
++				  SM5714_CHG_MODE_SUSPEND);
++		msleep(50);
++		sm5714_chg_update(fg, SM5714_CHG_REG_CNTL2, SM5714_CHG_MODE_MASK,
++				  SM5714_CHG_MODE_CHG_ON_VBUS);
++	}
++	sm5714_chg_set_enable(fg, false);
++	msleep(10);
++	sm5714_chg_set_enable(fg, true);
++	fg->cycle_start = jiffies;
++}
++
++/* track full/recharge, restart the charge loop periodically and when stuck */
++static bool sm5714_chg_supervise(struct sm5714_fg *fg, int st1, int st2, int float_mv)
++{
++	struct device *dev = &fg->client->dev;
++	int int3, soc, vbat;
++	bool charge;
++
++	int3 = sm5714_chg_read(fg, SM5714_CHG_REG_INT3);	/* clears on read */
++	if (int3 >= 0 && (int3 & SM5714_CHG_INT3_FASTTMROFF) && !fg->timer_expired) {
++		dev_warn(dev, "charger safety timer expired\n");
++		fg->timer_expired = true;
++	}
++
++	soc = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_SOC);
++	vbat = sm5714_fg_read_sram(fg, SM5714_FG_SRAM_VBAT_AVG);
++	if (vbat >= 0)
++		vbat = sm5714_fg_conv_voltage(vbat);
++
++	if (!fg->full && ((st2 & SM5714_CHG_STATUS2_TOPOFF) ||
++			  (!(st2 & SM5714_CHG_STATUS2_CHGON) && soc >= 0 &&
++			   ((soc + 0x80) >> 8) >= 100))) {
++		fg->full = true;
++		dev_info(dev, "battery full, charging off until %d mV\n",
++			 float_mv - SM5714_CHG_RECHARGE_DROP_MV);
++	} else if (fg->full && vbat >= 0 && vbat < float_mv - SM5714_CHG_RECHARGE_DROP_MV) {
++		fg->full = false;
++		dev_info(dev, "battery at %d mV, recharging\n", vbat);
++	}
++
++	charge = fg->zone != SM5714_ZONE_STOP && !fg->full;
++	if (!charge) {
++		fg->cycling = false;
++		fg->stuck_polls = 0;
++		return false;
++	}
++
++	if (st2 & SM5714_CHG_STATUS2_CHGON) {
++		fg->stuck_polls = 0;
++		fg->timer_expired = false;
++		if (!fg->cycling) {
++			fg->cycling = true;
++			fg->cycle_start = jiffies;
++		} else if (time_after(jiffies, fg->cycle_start + SM5714_CHG_CYCLE_TIME)) {
++			dev_info(dev, "restarting charge cycle\n");
++			sm5714_chg_restart(fg, false);
++		}
++		return true;
++	}
++
++	fg->cycling = false;
++	if (++fg->stuck_polls >= SM5714_CHG_STUCK_POLLS &&
++	    (!fg->last_recover ||
++	     time_after(jiffies, fg->last_recover + SM5714_CHG_RECOVER_INTERVAL))) {
++		dev_warn(dev, "charger not charging (st1 %#x st2 %#x int3 %#x, %d mV), restarting it\n",
++			 st1, st2, int3, vbat);
++		sm5714_chg_restart(fg, true);
++		fg->last_recover = jiffies;
++		fg->stuck_polls = 0;
++	}
++
++	return true;
++}
++
+ static void sm5714_chg_work(struct work_struct *work)
+ {
+ 	struct sm5714_fg *fg = container_of(to_delayed_work(work),
+@@ -243,6 +369,7 @@ static void sm5714_chg_work(struct work_struct *work)
+ 	if (st1 < 0 || st2 < 0 || sm5714_fg_temp(fg, &temp))
+ 		goto out;
+ 
++	fg->temp = temp;
+ 	zone = sm5714_next_zone(fg->zone, temp);
+ 	if (zone != fg->zone) {
+ 		dev_info(dev, "battery %d.%d C: charging %s\n", temp / 10, abs(temp % 10),
+@@ -252,14 +379,15 @@ static void sm5714_chg_work(struct work_struct *work)
+ 	}
+ 
+ 	if (st1 & SM5714_CHG_STATUS1_VBUSPOK) {
++		int float_mv = zone == SM5714_ZONE_NORMAL ? SM5714_CHG_FLOAT_NORMAL_MV :
++							     SM5714_CHG_FLOAT_WARM_MV;
++
+ 		if (st2 & SM5714_CHG_STATUS2_WDT_EXPIRED)
+ 			sm5714_chg_update(fg, SM5714_CHG_REG_WDTCNTL,
+ 					  SM5714_CHG_WDT_CLEAR, SM5714_CHG_WDT_CLEAR);
+ 
+ 		sm5714_chg_update(fg, SM5714_CHG_REG_CHGCNTL4, 0x3f,
+-				  SM5714_CHG_FLOAT_MV(zone == SM5714_ZONE_NORMAL ?
+-						      SM5714_CHG_FLOAT_NORMAL_MV :
+-						      SM5714_CHG_FLOAT_WARM_MV));
++				  SM5714_CHG_FLOAT_MV(float_mv));
+ 		sm5714_chg_update(fg, SM5714_CHG_REG_CHGCNTL2, 0xff,
+ 				  SM5714_CHG_CURRENT_MA(zone == SM5714_ZONE_NORMAL ?
+ 							SM5714_CHG_CURRENT_NORMAL_MA :
+@@ -270,8 +398,16 @@ static void sm5714_chg_work(struct work_struct *work)
+ 				  zone == SM5714_ZONE_STOP ? SM5714_CHG_MODE_SUSPEND :
+ 							     SM5714_CHG_MODE_CHG_ON_VBUS);
+ 
++		sm5714_chg_set_enable(fg, sm5714_chg_supervise(fg, st1, st2, float_mv));
++
+ 		/* 90 s watchdog: if Linux stops kicking it the charger falls back to safe defaults */
+ 		sm5714_chg_update(fg, SM5714_CHG_REG_WDTCNTL, SM5714_CHG_WDT_EN, SM5714_CHG_WDT_EN);
++	} else {
++		/* unplugged: the next charger starts a fresh cycle */
++		fg->full = false;
++		fg->timer_expired = false;
++		fg->cycling = false;
++		fg->stuck_polls = 0;
+ 	}
+ 
+ 	wdt = sm5714_chg_read(fg, SM5714_CHG_REG_WDTCNTL);
+@@ -356,6 +492,16 @@ static int sm5714_fg_get_property(struct power_supply *psy,
+ 		val->intval = sm5714_fg_charge_status(fg);
+ 		break;
+ 
++	case POWER_SUPPLY_PROP_HEALTH:
++		if (fg->zone == SM5714_ZONE_STOP)
++			val->intval = fg->temp > SM5714_TEMP_COLD_RECOVER ?
++				      POWER_SUPPLY_HEALTH_OVERHEAT : POWER_SUPPLY_HEALTH_COLD;
++		else if (fg->timer_expired)
++			val->intval = POWER_SUPPLY_HEALTH_SAFETY_TIMER_EXPIRE;
++		else
++			val->intval = POWER_SUPPLY_HEALTH_GOOD;
++		break;
++
+ 	case POWER_SUPPLY_PROP_PRESENT:
+ 		val->intval = 1;
+ 		break;
+@@ -380,6 +526,7 @@ static enum power_supply_property sm5714_fg_props[] = {
+ 	POWER_SUPPLY_PROP_CURRENT_AVG,
+ 	POWER_SUPPLY_PROP_TEMP,
+ 	POWER_SUPPLY_PROP_STATUS,
++	POWER_SUPPLY_PROP_HEALTH,
+ 	POWER_SUPPLY_PROP_PRESENT,
+ 	POWER_SUPPLY_PROP_TECHNOLOGY,
+ };
+-- 
+2.56.0
+
